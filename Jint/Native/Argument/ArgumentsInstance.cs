@@ -158,7 +158,7 @@ namespace Jint.Native.Argument
                 {
                     return false;
                 }
-                setter.Call(receiver, new[] {value});
+                setter.Call(receiver, new[] { value });
             }
             else
             {
