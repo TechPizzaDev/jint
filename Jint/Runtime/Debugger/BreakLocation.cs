@@ -4,7 +4,7 @@ namespace Jint.Runtime.Debugger;
 /// BreakLocation is a combination of an Esprima position (line and column) and a source (path or identifier of script).
 /// Like Esprima, first column is 0 and first line is 1.
 /// </summary>
-public sealed record BreakLocation
+public readonly record struct BreakLocation
 {
     public BreakLocation(string? source, int line, int column)
     {

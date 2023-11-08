@@ -9,30 +9,22 @@ namespace Jint.Runtime.Debugger;
 /// </remarks>
 internal sealed class OptionalSourceBreakLocationEqualityComparer : IEqualityComparer<BreakLocation>
 {
-    public bool Equals(BreakLocation? x, BreakLocation? y)
+    public static OptionalSourceBreakLocationEqualityComparer Instance { get; } = new();
+
+    private OptionalSourceBreakLocationEqualityComparer()
     {
-        if (ReferenceEquals(x, y))
-        {
-            return true;
-        }
+    }
 
-        if (x is null || y is null)
-        {
-            return false;
-        }
-
+    public bool Equals(BreakLocation x, BreakLocation y)
+    {
         return
             x.Line == y.Line &&
             x.Column == y.Column &&
             (x.Source == null || y.Source == null || x.Source == y.Source);
     }
 
-    public int GetHashCode(BreakLocation? obj)
+    public int GetHashCode(BreakLocation obj)
     {
-        if (obj == null)
-        {
-            return 0;
-        }
         // Keeping this rather than HashCode.Combine, which isn't in net461 or netstandard2.0
         unchecked
         {

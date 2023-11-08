@@ -23,7 +23,7 @@ namespace Jint.Tests.Runtime.Debugger
 
             bool didPropertyAccess = false;
 
-            engine.DebugHandler.Step += (sender, info) =>
+            engine.DebugHandler.Step += (DebugHandler sender, ref DebugInformation info) =>
             {
                 // We should never reach "fail", because the only way it's executed is from
                 // within this Step handler

@@ -4,7 +4,7 @@ using Jint.Native;
 
 namespace Jint.Runtime.Debugger
 {
-    public sealed class DebugInformation : EventArgs
+    public struct DebugInformation
     {
         private readonly Engine _engine;
         private readonly Location _currentLocation;

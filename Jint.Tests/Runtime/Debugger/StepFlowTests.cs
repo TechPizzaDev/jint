@@ -12,7 +12,7 @@ namespace Jint.Tests.Runtime.Debugger
                 .InitialStepMode(StepMode.Into));
 
             var nodes = new List<Node>();
-            engine.DebugHandler.Step += (sender, info) =>
+            engine.DebugHandler.Step += (DebugHandler sender, ref DebugInformation info) =>
             {
                 nodes.Add(info.CurrentNode);
                 return StepMode.Into;

@@ -1547,11 +1547,9 @@ var prep = function (fn) { fn(); };
             Assert.Equal(1, countBreak);
         }
 
-        private StepMode EngineStep(object sender, DebugInformation debugInfo)
+        private StepMode EngineStep(DebugHandler sender, ref DebugInformation debugInfo)
         {
             Assert.NotNull(sender);
-            Assert.IsType(typeof(Engine), sender);
-            Assert.NotNull(debugInfo);
 
             countBreak++;
             return stepMode;
@@ -1580,11 +1578,9 @@ var prep = function (fn) { fn(); };
             Assert.Equal(1, countBreak);
         }
 
-        private StepMode EngineStepVerifyDebugInfo(object sender, DebugInformation debugInfo)
+        private StepMode EngineStepVerifyDebugInfo(DebugHandler sender, ref DebugInformation debugInfo)
         {
             Assert.NotNull(sender);
-            Assert.IsType(typeof(Engine), sender);
-            Assert.NotNull(debugInfo);
 
             Assert.NotNull(debugInfo.CallStack);
             Assert.NotNull(debugInfo.CurrentNode);
@@ -1674,11 +1670,9 @@ var prep = function (fn) { fn(); };
             Assert.Equal(4, countBreak);
         }
 
-        private StepMode EngineStepOutWhenInsideFunction(object sender, DebugInformation debugInfo)
+        private StepMode EngineStepOutWhenInsideFunction(DebugHandler sender, ref DebugInformation debugInfo)
         {
             Assert.NotNull(sender);
-            Assert.IsType(typeof(Engine), sender);
-            Assert.NotNull(debugInfo);
 
             countBreak++;
             if (debugInfo.CallStack.Count > 1) // CallStack always has at least one element
@@ -3011,7 +3005,7 @@ x.test = {
             engine.DebugHandler.BeforeEvaluate += (sender, ast) =>
             {
                 beforeEvaluateTriggeredCount++;
-                Assert.Equal(engine, sender);
+                Assert.Equal(engine, sender.Engine);
 
                 switch (beforeEvaluateTriggeredCount)
                 {
@@ -3042,7 +3036,7 @@ x.test = {
         {
             var engine = new Engine();
             
-            var float32 = new float [] { 42f, 23 };
+            var float32 = new float[] { 42f, 23 };
             
             engine.SetValue("float32", float32); 
             engine.SetValue("testFloat32Array", new Action<float[]>(v => Assert.Equal(v, float32)));
@@ -3062,7 +3056,7 @@ x.test = {
             engine.DebugHandler.BeforeEvaluate += (sender, ast) =>
             {
                 beforeEvaluateTriggered = true;
-                Assert.Equal(engine, sender);
+                Assert.Equal(engine, sender.Engine);
                 Assert.Equal(expectedSource, ast.Location.Source);
                 Assert.Collection(ast.Body, node => Assert.True(TestHelpers.IsLiteral(node, "dummy")));
             };

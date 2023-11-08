@@ -34,10 +34,10 @@ namespace Jint.Tests.Runtime.Debugger
             );
 
             bool didBreak = false;
-            engine.DebugHandler.Break += (sender, info) =>
+            engine.DebugHandler.Break += (DebugHandler sender, ref DebugInformation info) =>
             {
                 didBreak = true;
-                breakHandler(sender as Engine, info);
+                breakHandler(engine, info);
                 return StepMode.None;
             };
 
@@ -49,7 +49,7 @@ namespace Jint.Tests.Runtime.Debugger
         /// <inheritdoc cref="TestAtBreak()"/>
         public static void TestAtBreak(Action<Engine> initialization, Action<DebugInformation> breakHandler)
         {
-            TestAtBreak(engine => initialization(engine), (engine, info) => breakHandler(info));
+            TestAtBreak(engine => initialization(engine), (sender, info) => breakHandler(info));
         }
 
         /// <summary>
@@ -66,7 +66,7 @@ namespace Jint.Tests.Runtime.Debugger
         /// <inheritdoc cref="TestAtBreak()"/>
         public static void TestAtBreak(string script, Action<DebugInformation> breakHandler)
         {
-            TestAtBreak(script, (engine, info) => breakHandler(info));
+            TestAtBreak(script, (sender, info) => breakHandler(info));
         }
     }
 }

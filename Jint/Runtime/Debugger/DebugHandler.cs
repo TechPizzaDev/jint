@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Esprima;
 using Esprima.Ast;
 using Jint.Native;
@@ -15,8 +16,8 @@ namespace Jint.Runtime.Debugger
 
     public class DebugHandler
     {
-        public delegate void BeforeEvaluateEventHandler(object sender, Program ast);
-        public delegate StepMode DebugEventHandler(object sender, DebugInformation e);
+        public delegate void BeforeEvaluateEventHandler(DebugHandler sender, Program ast);
+        public delegate StepMode DebugEventHandler(DebugHandler sender, ref DebugInformation e);
 
         private readonly Engine _engine;
         private bool _paused;
@@ -59,7 +60,14 @@ namespace Jint.Runtime.Debugger
             HandleNewStepMode(initialStepMode);
         }
 
-        private bool IsStepping => _engine.CallStack.Count <= _steppingDepth;
+        private bool IsStepping
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                return _engine.CallStack.Count <= _steppingDepth;
+            }
+        }
 
         /// <summary>
         /// The location of the current (step-eligible) AST node being executed.
@@ -74,6 +82,8 @@ namespace Jint.Runtime.Debugger
         /// Collection of active breakpoints for the engine.
         /// </summary>
         public BreakPointCollection BreakPoints { get; } = new BreakPointCollection();
+
+        public Engine Engine => _engine;
 
         /// <summary>
         /// Evaluates a script (expression) within the current execution context.
@@ -143,7 +153,7 @@ namespace Jint.Runtime.Debugger
         {
             if (ast != null)
             {
-                BeforeEvaluate?.Invoke(_engine, ast);
+                BeforeEvaluate?.Invoke(this, ast);
             }
         }
 
@@ -233,28 +243,28 @@ namespace Jint.Runtime.Debugger
             StepMode? result = type switch
             {
                 // Conventionally, sender should be DebugHandler - but Engine is more useful
-                PauseType.Skip => Skip?.Invoke(_engine, info),
-                PauseType.Step => Step?.Invoke(_engine, info),
-                PauseType.Break => Break?.Invoke(_engine, info),
-                PauseType.DebuggerStatement => Break?.Invoke(_engine, info),
+                PauseType.Skip => Skip?.Invoke(this, ref info),
+                PauseType.Step => Step?.Invoke(this, ref info),
+                PauseType.Break => Break?.Invoke(this, ref info),
+                PauseType.DebuggerStatement => Break?.Invoke(this, ref info),
                 _ => throw new ArgumentException("Invalid pause type", nameof(type))
             };
 
-            HandleNewStepMode(result);
+            if (result.HasValue)
+            {
+                HandleNewStepMode(result.GetValueOrDefault());
+            }
         }
 
-        private void HandleNewStepMode(StepMode? newStepMode)
+        private void HandleNewStepMode(StepMode newStepMode)
         {
-            if (newStepMode != null)
+            _steppingDepth = newStepMode switch
             {
-                _steppingDepth = newStepMode switch
-                {
-                    StepMode.Over => _engine.CallStack.Count,// Resume stepping when back at this level of the stack
-                    StepMode.Out => _engine.CallStack.Count - 1,// Resume stepping when we've popped the stack
-                    StepMode.None => int.MinValue,// Never step
-                    _ => int.MaxValue,// Always step
-                };
-            }
+                StepMode.Over => _engine.CallStack.Count,// Resume stepping when back at this level of the stack
+                StepMode.Out => _engine.CallStack.Count - 1,// Resume stepping when we've popped the stack
+                StepMode.None => int.MinValue,// Never step
+                _ => int.MaxValue,// Always step
+            };
         }
     }
 }
