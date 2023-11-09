@@ -26,6 +26,8 @@ internal sealed class JintDoWhileStatement : JintStatement<DoWhileStatement>
 
     protected override Completion ExecuteInternal(EvaluationContext context)
     {
+        var debugHandler = context.DebugMode ? context.Engine.DebugHandler : null;
+
         JsValue v = JsValue.Undefined;
         bool iterating;
 
@@ -50,13 +52,11 @@ internal sealed class JintDoWhileStatement : JintStatement<DoWhileStatement>
                 }
             }
 
-            if (context.DebugMode)
-            {
-                context.Engine.DebugHandler.OnStep(_test._expression);
-            }
+            debugHandler?.OnStep(_test._expression);
 
             iterating = TypeConverter.ToBoolean(_test.GetValue(context));
-        } while (iterating);
+        }
+        while (iterating);
 
         return new Completion(CompletionType.Normal, v, ((JintStatement) this)._statement);
     }

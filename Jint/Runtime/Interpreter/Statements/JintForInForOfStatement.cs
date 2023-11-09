@@ -160,6 +160,8 @@ namespace Jint.Runtime.Interpreter.Statements
             var completionType = CompletionType.Normal;
             var close = false;
 
+            var debugHandler = context.DebugMode ? context.Engine.DebugHandler : null;
+
             try
             {
                 while (true)
@@ -205,10 +207,7 @@ namespace Jint.Runtime.Interpreter.Statements
                         }
                     }
 
-                    if (context.DebugMode)
-                    {
-                        context.Engine.DebugHandler.OnStep(_leftNode);
-                    }
+                    debugHandler?.OnStep(_leftNode);
 
                     var status = CompletionType.Normal;
                     if (!destructuring)

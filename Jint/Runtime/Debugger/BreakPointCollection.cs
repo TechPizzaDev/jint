@@ -63,16 +63,15 @@ namespace Jint.Runtime.Debugger
 
         internal BreakPoint? FindMatch(DebugHandler debugger, BreakLocation location)
         {
-            if (!Active)
+            if (Active && _breakPoints.TryGetValue(location, out var breakPoint))
             {
-                return null;
+                return RunBreakpointCondition(debugger, breakPoint);
             }
+            return null;
+        }
 
-            if (!_breakPoints.TryGetValue(location, out var breakPoint))
-            {
-                return null;
-            }
-
+        private static BreakPoint? RunBreakpointCondition(DebugHandler debugger, BreakPoint breakPoint)
+        {
             if (!string.IsNullOrEmpty(breakPoint.Condition))
             {
                 try

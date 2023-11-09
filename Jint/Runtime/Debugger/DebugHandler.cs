@@ -63,10 +63,13 @@ namespace Jint.Runtime.Debugger
         private bool IsStepping
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                return _engine.CallStack.Count <= _steppingDepth;
-            }
+            get => _engine.CallStack.Count <= _steppingDepth;
+        }
+
+        private bool HasStepEvents
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Break != null || Step != null || Skip != null;
         }
 
         /// <summary>
@@ -76,7 +79,7 @@ namespace Jint.Runtime.Debugger
         /// The location is available as long as DebugMode is enabled - i.e. even when not stepping
         /// or hitting a breakpoint.
         /// </remarks>
-        public Location? CurrentLocation { get; private set; }
+        public Location CurrentLocation { get; private set; }
 
         /// <summary>
         /// Collection of active breakpoints for the engine.
@@ -166,7 +169,12 @@ namespace Jint.Runtime.Debugger
             }
             _paused = true;
 
-            CheckBreakPointAndPause(node, node.Location);
+            CurrentLocation = node.Location;
+            if (HasStepEvents)
+            {
+                CheckBreakPointAndPause(node, node.Location);
+            }
+            _paused = false;
         }
 
         internal void OnReturnPoint(Node functionBody, JsValue returnValue)
@@ -182,7 +190,12 @@ namespace Jint.Runtime.Debugger
             var functionBodyEnd = bodyLocation.End;
             var location = Location.From(functionBodyEnd, functionBodyEnd, bodyLocation.Source);
 
-            CheckBreakPointAndPause(node: null, location, returnValue);
+            CurrentLocation = location;
+            if (HasStepEvents)
+            {
+                CheckBreakPointAndPause(node: null, location, returnValue);
+            }
+            _paused = false;
         }
 
         private void CheckBreakPointAndPause(
@@ -190,8 +203,6 @@ namespace Jint.Runtime.Debugger
             Location location,
             JsValue? returnValue = null)
         {
-            CurrentLocation = location;
-
             // Even if we matched a breakpoint, if we're stepping, the reason we're pausing is the step.
             // Still, we need to include the breakpoint at this location, in case the debugger UI needs to update
             // e.g. a hit count.
@@ -219,8 +230,6 @@ namespace Jint.Runtime.Debugger
             }
 
             Pause(pauseType, node, location, returnValue, breakPoint);
-
-            _paused = false;
         }
 
         private void Pause(
@@ -245,10 +254,11 @@ namespace Jint.Runtime.Debugger
                 // Conventionally, sender should be DebugHandler - but Engine is more useful
                 PauseType.Skip => Skip?.Invoke(this, ref info),
                 PauseType.Step => Step?.Invoke(this, ref info),
-                PauseType.Break => Break?.Invoke(this, ref info),
-                PauseType.DebuggerStatement => Break?.Invoke(this, ref info),
-                _ => throw new ArgumentException("Invalid pause type", nameof(type))
+                PauseType.Break or PauseType.DebuggerStatement => Break?.Invoke(this, ref info),
+                _ => ThrowOnInvalidPauseType()
             };
+
+            static StepMode ThrowOnInvalidPauseType() => throw new ArgumentException("Invalid pause type", nameof(type));
 
             if (result.HasValue)
             {

@@ -42,9 +42,6 @@ namespace Jint
 
         private readonly Agent _agent = new();
 
-        // lazy properties
-        private DebugHandler? _debugHandler;
-
         // cached access
         internal readonly IObjectConverter[]? _objectConverters;
         internal readonly Constraint[] _constraints;
@@ -120,6 +117,8 @@ namespace Jint
 
             configure?.Invoke(this, Options);
 
+            DebugHandler = new DebugHandler(this, Options.Debugger.InitialStepMode);
+
             _extensionMethods = ExtensionMethodCache.Build(Options.Interop.ExtensionMethodTypes);
 
             Reset();
@@ -184,7 +183,7 @@ namespace Jint
             private set;
         }
 
-        public DebugHandler DebugHandler => _debugHandler ??= new DebugHandler(this, Options.Debugger.InitialStepMode);
+        public DebugHandler DebugHandler { get; }
 
 
         internal ExecutionContext EnterExecutionContext(

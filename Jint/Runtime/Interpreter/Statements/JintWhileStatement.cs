@@ -26,13 +26,12 @@ namespace Jint.Runtime.Interpreter.Statements
 
         protected override Completion ExecuteInternal(EvaluationContext context)
         {
+            var debugHandler = context.DebugMode ? context.Engine.DebugHandler : null;
+
             var v = JsValue.Undefined;
             while (true)
             {
-                if (context.DebugMode)
-                {
-                    context.Engine.DebugHandler.OnStep(_test._expression);
-                }
+                debugHandler?.OnStep(_test._expression);
 
                 var jsValue = _test.GetValue(context);
                 if (!TypeConverter.ToBoolean(jsValue))
