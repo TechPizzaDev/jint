@@ -117,8 +117,6 @@ namespace Jint
 
             configure?.Invoke(this, Options);
 
-            DebugHandler = new DebugHandler(this, Options.Debugger.InitialStepMode);
-
             _extensionMethods = ExtensionMethodCache.Build(Options.Interop.ExtensionMethodTypes);
 
             Reset();
@@ -150,6 +148,8 @@ namespace Jint
             };
 
             _defaultParser = new JavaScriptParser(_defaultParserOptions);
+
+            DebugHandler = new DebugHandler(this, Options.Debugger.InitialStepMode);
         }
 
         private void Reset()
