@@ -28,20 +28,20 @@ internal sealed class ModuleEnvironmentRecord : DeclarativeEnvironmentRecord
     /// <summary>
     /// https://tc39.es/ecma262/#sec-createimportbinding
     /// </summary>
-    public void CreateImportBinding(string importName, ModuleRecord module, string name)
+    public void CreateImportBinding(Key importName, ModuleRecord module, string name)
     {
         _importBindings[importName] = new IndirectBinding(module, name);
-        CreateImmutableBindingAndInitialize(importName, true, JsValue.Undefined);
+        CreateImmutableBindingAndInitialize(importName, true, Undefined);
     }
 
     /// <summary>
     /// https://tc39.es/ecma262/#sec-module-environment-records-getbindingvalue-n-s
     /// </summary>
-    public override JsValue GetBindingValue(string name, bool strict)
+    public override JsValue GetBindingValue(Key name, bool strict)
     {
         if (_importBindings.TryGetValue(name, out var indirectBinding))
         {
-            return indirectBinding.Module._environment.GetBindingValue(indirectBinding.BindingName, true);
+            return indirectBinding.Module._environment.GetBindingValue((Key) indirectBinding.BindingName, true);
         }
 
         return base.GetBindingValue(name, strict);
@@ -51,7 +51,7 @@ internal sealed class ModuleEnvironmentRecord : DeclarativeEnvironmentRecord
     {
         if (_importBindings.TryGetValue(name.Key, out var indirectBinding))
         {
-            value = indirectBinding.Module._environment.GetBindingValue(indirectBinding.BindingName, true);
+            value = indirectBinding.Module._environment.GetBindingValue((Key) indirectBinding.BindingName, true);
             binding = new(value, canBeDeleted: false, mutable: false, strict: true);
             return true;
         }

@@ -49,7 +49,7 @@ namespace Jint.Runtime.Interop
             Func<ReflectionAccessor?>? accessorFactory = null,
             bool forWrite = false)
         {
-            var key = new Engine.ClrPropertyDescriptorFactoriesKey(type, member);
+            var key = new Engine.ClrPropertyDescriptorFactoriesKey(type, (Key) member);
 
             var factories = engine._reflectionAccessors;
             if (factories.TryGetValue(key, out var accessor))

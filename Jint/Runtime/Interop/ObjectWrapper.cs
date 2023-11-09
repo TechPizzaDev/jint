@@ -46,7 +46,7 @@ namespace Jint.Runtime.Interop
             // check if we can take shortcuts for empty object, no need to generate properties
             if (property is JsString stringKey)
             {
-                var member = stringKey.ToString();
+                var member = (Key) stringKey.ToString();
                 if (_properties is null || !_properties.ContainsKey(member))
                 {
                     // can try utilize fast path

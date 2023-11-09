@@ -24,7 +24,7 @@ namespace Jint.Runtime.Environments
         /// </summary>
         /// <param name="name">The identifier of the binding</param>
         /// <returns><c>true</c> if it does and <c>false</c> if it does not.</returns>
-        public abstract bool HasBinding(string name);
+        public abstract bool HasBinding(Key name);
 
         internal abstract bool HasBinding(BindingName name);
 
@@ -39,21 +39,21 @@ namespace Jint.Runtime.Environments
         /// </summary>
         /// <param name="name">The identifier of the binding.</param>
         /// <param name="canBeDeleted"><c>true</c> if the binding may be subsequently deleted.</param>
-        public abstract void CreateMutableBinding(string name, bool canBeDeleted = false);
+        public abstract void CreateMutableBinding(Key name, bool canBeDeleted = false);
 
         /// <summary>
         /// Creates a new but uninitialized immutable binding in an environment record.
         /// </summary>
         /// <param name="name">The identifier of the binding.</param>
         /// <param name="strict"><c>false</c> if the binding may used before it's been initialized.</param>
-        public abstract void CreateImmutableBinding(string name, bool strict = true);
+        public abstract void CreateImmutableBinding(Key name, bool strict = true);
 
         /// <summary>
         /// Set the value of an already existing but uninitialized binding in an Environment Record.
         /// </summary>
         /// <param name="name">The text of the bound name</param>
         /// <param name="value">The value for the binding.</param>
-        public abstract void InitializeBinding(string name, JsValue value);
+        public abstract void InitializeBinding(Key name, JsValue value);
 
         /// <summary>
         /// Sets the value of an already existing mutable binding in an environment record.
@@ -61,7 +61,7 @@ namespace Jint.Runtime.Environments
         /// <param name="name">The identifier of the binding</param>
         /// <param name="value">The value of the binding.</param>
         /// <param name="strict">The identify strict mode references.</param>
-        public abstract void SetMutableBinding(string name, JsValue value, bool strict);
+        public abstract void SetMutableBinding(Key name, JsValue value, bool strict);
 
         internal abstract void SetMutableBinding(BindingName name, JsValue value, bool strict);
 
@@ -71,14 +71,14 @@ namespace Jint.Runtime.Environments
         /// <param name="name">The identifier of the binding</param>
         /// <param name="strict">The identify strict mode references.</param>
         /// <return>The value of an already existing binding from an environment record.</return>
-        public abstract JsValue GetBindingValue(string name, bool strict);
+        public abstract JsValue GetBindingValue(Key name, bool strict);
 
         /// <summary>
         /// Delete a binding from an environment record. The String value N is the text of the bound name If a binding for N exists, remove the binding and return true. If the binding exists but cannot be removed return false. If the binding does not exist return true.
         /// </summary>
         /// <param name="name">The identifier of the binding</param>
         /// <returns><true>true</true> if the deletion is successfull.</returns>
-        public abstract bool DeleteBinding(string name);
+        public abstract bool DeleteBinding(Key name);
 
         public abstract bool HasThisBinding();
 
@@ -120,14 +120,17 @@ namespace Jint.Runtime.Environments
             public readonly JsString Value;
             public readonly JsValue? CalculatedValue;
 
-            public BindingName(string value)
+            public BindingName(Key value)
             {
-                var key = (Key) value;
-                Key = key;
-                Value = JsString.Create(value);
-                if (key == KnownKeys.Undefined)
+                Key = value;
+                if (Key == KnownKeys.Undefined)
                 {
                     CalculatedValue = Undefined;
+                    Value = JsString.UndefinedString;
+                }
+                else
+                {
+                    Value = JsString.Create(value.ToString());
                 }
             }
         }
@@ -151,7 +154,7 @@ namespace Jint.Runtime.Environments
                     var i = 0;
                     foreach (var key in bindingNames)
                     {
-                        bindings[i++] = new KeyValuePair<JsValue, JsValue>(key, _record.GetBindingValue(key, false));
+                        bindings[i++] = new KeyValuePair<JsValue, JsValue>(key, _record.GetBindingValue((Key) key, false));
                     }
                     return bindings;
                 }

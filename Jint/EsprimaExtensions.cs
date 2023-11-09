@@ -287,7 +287,7 @@ namespace Jint
             if (expression is Identifier identifier)
             {
                 var catchEnvRecord = (DeclarativeEnvironmentRecord) env;
-                catchEnvRecord.CreateMutableBindingAndInitialize(identifier.Name, canBeDeleted: false, value);
+                catchEnvRecord.CreateMutableBindingAndInitialize((Key) identifier.Name, canBeDeleted: false, value);
             }
             else if (expression is BindingPattern bindingPattern)
             {

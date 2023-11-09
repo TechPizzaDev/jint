@@ -209,7 +209,7 @@ internal sealed class JintFunctionDefinition
             for (var i = functionDeclarations.Count - 1; i >= 0; i--)
             {
                 var d = functionDeclarations[i];
-                var fn = d.Id!.Name;
+                var fn = (Key) d.Id!.Name;
                 if (state.FunctionNames.Add(fn))
                 {
                     functionsToInitialize.AddFirst(d);
@@ -238,7 +238,7 @@ internal sealed class JintFunctionDefinition
         }
         else if (!state.HasParameterExpressions)
         {
-            if (state.FunctionNames.Contains(ParameterNameArguments)
+            if (state.FunctionNames.Contains((Key) ParameterNameArguments)
                 || lexicalNames?.Contains(ParameterNameArguments) == true)
             {
                 state.ArgumentsObjectNeeded = false;
@@ -339,8 +339,9 @@ internal sealed class JintFunctionDefinition
     {
         if (parameter is Identifier identifier)
         {
-            _hasDuplicates |= checkDuplicates && target.Contains(identifier.Name);
-            target.Add(identifier.Name);
+            var id = (Key) identifier.Name;
+            _hasDuplicates |= checkDuplicates && target.Contains(id);
+            target.Add(id);
             hasArguments |= identifier.Name == "arguments";
             return;
         }
@@ -416,7 +417,7 @@ internal sealed class JintFunctionDefinition
         out bool hasArguments)
     {
         hasArguments = false;
-        state.IsSimpleParameterList  = true;
+        state.IsSimpleParameterList= true;
 
         var countParameters = true;
         ref readonly var functionDeclarationParams = ref function.Params;
@@ -429,10 +430,10 @@ internal sealed class JintFunctionDefinition
 
             if (type == Nodes.Identifier)
             {
-                var id = (Identifier) parameter;
-                state.HasDuplicates |= parameterNames.Contains(id.Name);
-                hasArguments = id.Name == "arguments";
-                parameterNames.Add(id.Name);
+                var id = (Key) ((Identifier) parameter).Name;
+                state.HasDuplicates |= parameterNames.Contains(id);
+                hasArguments = id == "arguments";
+                parameterNames.Add(id);
             }
             else if (type != Nodes.Literal)
             {

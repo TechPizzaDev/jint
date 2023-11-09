@@ -1591,9 +1591,9 @@ var prep = function (fn) { fn(); };
             var globalScope = debugInfo.CurrentScopeChain.Single(s => s.ScopeType == DebugScopeType.Global);
             var localScope = debugInfo.CurrentScopeChain.Single(s => s.ScopeType == DebugScopeType.Local);
             Assert.Contains("global", globalScope.BindingNames);
-            Assert.Equal(true, globalScope.GetBindingValue("global").AsBoolean());
+            Assert.Equal(true, globalScope.GetBindingValue((Key) "global").AsBoolean());
             Assert.Contains("local", localScope.BindingNames);
-            Assert.Equal(false, localScope.GetBindingValue("local").AsBoolean());
+            Assert.Equal(false, localScope.GetBindingValue((Key) "local").AsBoolean());
             Assert.DoesNotContain("global", localScope.BindingNames);
             countBreak++;
             return stepMode;
@@ -3035,12 +3035,12 @@ x.test = {
         public void ShouldConvertJsTypedArraysCorrectly()
         {
             var engine = new Engine();
-            
+
             var float32 = new float[] { 42f, 23 };
-            
-            engine.SetValue("float32", float32); 
+
+            engine.SetValue("float32", float32);
             engine.SetValue("testFloat32Array", new Action<float[]>(v => Assert.Equal(v, float32)));
-            
+
             engine.Evaluate(@"
                 testFloat32Array(new Float32Array(float32));
             ");

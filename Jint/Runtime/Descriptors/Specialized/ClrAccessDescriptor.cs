@@ -16,7 +16,7 @@ namespace Jint.Runtime.Descriptors.Specialized
         public ClrAccessDescriptor(
             DeclarativeEnvironmentRecord env,
             Engine engine,
-            string name)
+            Key name)
             : base(value: null, PropertyFlag.Configurable)
         {
             _flags |= PropertyFlag.NonData;
@@ -37,7 +37,7 @@ namespace Jint.Runtime.Descriptors.Specialized
 
         private void DoSet(JsValue n, JsValue o)
         {
-            _env.SetMutableBinding(_name.Key.Name, o, true);
+            _env.SetMutableBinding(_name.Key, o, true);
         }
     }
 }

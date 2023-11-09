@@ -153,55 +153,55 @@ namespace Jint.Runtime.Interpreter.Expressions
             switch (_operator)
             {
                 case UnaryOperator.Plus:
-                {
-                    var v = _argument.GetValue(context);
-                    if (context.OperatorOverloadingAllowed &&
-                        TryOperatorOverloading(context, v, "op_UnaryPlus", out var result))
                     {
-                        return result;
-                    }
+                        var v = _argument.GetValue(context);
+                        if (context.OperatorOverloadingAllowed &&
+                            TryOperatorOverloading(context, v, "op_UnaryPlus", out var result))
+                        {
+                            return result;
+                        }
 
-                    return TypeConverter.ToNumber(v);
-                }
+                        return TypeConverter.ToNumber(v);
+                    }
                 case UnaryOperator.Minus:
-                {
-                    var v = _argument.GetValue(context);
-                    if (context.OperatorOverloadingAllowed &&
-                        TryOperatorOverloading(context, v, "op_UnaryNegation", out var result))
                     {
-                        return result;
-                    }
+                        var v = _argument.GetValue(context);
+                        if (context.OperatorOverloadingAllowed &&
+                            TryOperatorOverloading(context, v, "op_UnaryNegation", out var result))
+                        {
+                            return result;
+                        }
 
-                    return EvaluateMinus(v);
-                }
+                        return EvaluateMinus(v);
+                    }
                 case UnaryOperator.BitwiseNot:
-                {
-                    var v = _argument.GetValue(context);
-                    if (context.OperatorOverloadingAllowed &&
-                        TryOperatorOverloading(context, v, "op_OnesComplement", out var result))
                     {
-                        return result;
-                    }
+                        var v = _argument.GetValue(context);
+                        if (context.OperatorOverloadingAllowed &&
+                            TryOperatorOverloading(context, v, "op_OnesComplement", out var result))
+                        {
+                            return result;
+                        }
 
-                    var value = TypeConverter.ToNumeric(v);
-                    if (value.IsNumber())
-                    {
-                        return JsNumber.Create(~TypeConverter.ToInt32(value));
-                    }
+                        var value = TypeConverter.ToNumeric(v);
+                        if (value.IsNumber())
+                        {
+                            return JsNumber.Create(~TypeConverter.ToInt32(value));
+                        }
 
-                    return JsBigInt.Create(~value.AsBigInt());
-                }
+                        return JsBigInt.Create(~value.AsBigInt());
+                    }
                 case UnaryOperator.LogicalNot:
-                {
-                    var v = _argument.GetValue(context);
-                    if (context.OperatorOverloadingAllowed &&
-                        TryOperatorOverloading(context, v, "op_LogicalNot", out var result))
                     {
-                        return result;
-                    }
+                        var v = _argument.GetValue(context);
+                        if (context.OperatorOverloadingAllowed &&
+                            TryOperatorOverloading(context, v, "op_LogicalNot", out var result))
+                        {
+                            return result;
+                        }
 
-                    return !TypeConverter.ToBoolean(v) ? JsBoolean.True : JsBoolean.False;
-                }
+                        return !TypeConverter.ToBoolean(v) ? JsBoolean.True : JsBoolean.False;
+                    }
 
                 case UnaryOperator.Delete:
                     // https://262.ecma-international.org/5.1/#sec-11.4.1
@@ -257,7 +257,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                     var property = referencedName;
                     engine._referencePool.Return(r);
 
-                    return bindings.DeleteBinding(property.ToString()) ? JsBoolean.True : JsBoolean.False;
+                    return bindings.DeleteBinding((Key) property.ToString()) ? JsBoolean.True : JsBoolean.False;
 
                 case UnaryOperator.Void:
                     _argument.GetValue(context);

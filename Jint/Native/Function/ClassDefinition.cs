@@ -59,7 +59,7 @@ internal sealed class ClassDefinition
 
         if (_className is not null)
         {
-            classEnv.CreateImmutableBinding(_className, true);
+            classEnv.CreateImmutableBinding((Key) _className, true);
         }
 
         var outerPrivateEnvironment = engine.ExecutionContext.PrivateEnvironment;
@@ -203,7 +203,7 @@ internal sealed class ClassDefinition
 
             if (_className is not null)
             {
-                classEnv.InitializeBinding(_className, F);
+                classEnv.InitializeBinding((Key) _className, F);
             }
 
             F._privateMethods = instancePrivateMethods;
@@ -281,7 +281,7 @@ internal sealed class ClassDefinition
 
         public ClassFieldFunction(Expression expression) : base(Nodes.ExpressionStatement)
         {
-            var nodeList = NodeList.Create<Statement>(new [] { new ReturnStatement(expression) });
+            var nodeList = NodeList.Create<Statement>(new[] { new ReturnStatement(expression) });
             _statement = new BlockStatement(nodeList);
         }
 

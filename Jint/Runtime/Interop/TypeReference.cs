@@ -266,7 +266,7 @@ namespace Jint.Runtime.Interop
             }
             else
             {
-                var key = jsString._value;
+                var key = (Key) jsString._value;
 
                 if (_properties?.TryGetValue(key, out var descriptor) != true)
                 {

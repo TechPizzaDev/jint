@@ -73,7 +73,7 @@ namespace Jint.Runtime.Interpreter.Statements
                 var kind = _initStatement!._statement.Kind;
                 for (var i = 0; i < _boundNames.Count; i++)
                 {
-                    var name = _boundNames[i];
+                    var name = (Key) _boundNames[i];
                     if (kind == VariableDeclarationKind.Const)
                     {
                         loopEnvRec.CreateImmutableBinding(name, true);
@@ -177,7 +177,7 @@ namespace Jint.Runtime.Interpreter.Statements
 
             for (var j = 0; j < _boundNames!.Count; j++)
             {
-                var bn = _boundNames[j];
+                var bn = (Key) _boundNames[j];
                 var lastValue = lastIterationEnvRec.GetBindingValue(bn, true);
                 thisIterationEnv.CreateMutableBindingAndInitialize(bn, false, lastValue);
             }

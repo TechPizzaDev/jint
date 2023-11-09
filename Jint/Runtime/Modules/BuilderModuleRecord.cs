@@ -35,7 +35,7 @@ internal sealed class BuilderModuleRecord : SourceTextModuleRecord
             for (var i = 0; i < _exportBuilderDeclarations.Count; i++)
             {
                 var d = _exportBuilderDeclarations[i];
-                _environment.CreateImmutableBindingAndInitialize(d.Key, true, d.Value);
+                _environment.CreateImmutableBindingAndInitialize((Key) d.Key, true, d.Value);
                 _localExportEntries.Add(new ExportEntry(d.Key, null, null, d.Key));
             }
 

@@ -8,9 +8,11 @@ namespace Jint
     /// as runtime does a lot of repetitive dictionary lookups.
     /// </summary>
     [DebuggerDisplay("{" + nameof(Name) + "}")]
-    internal readonly struct Key : IEquatable<Key>
+    public readonly struct Key : IEquatable<Key>
     {
-        private Key(string name)
+        public static Key Empty => (Key) "";
+
+        internal Key(string name)
         {
             Name = name;
             HashCode = name.GetHashCode();
@@ -19,7 +21,7 @@ namespace Jint
         internal readonly string Name;
         internal readonly int HashCode;
 
-        public static implicit operator Key(string name)
+        public static explicit operator Key(string name)
         {
             return new Key(name);
         }

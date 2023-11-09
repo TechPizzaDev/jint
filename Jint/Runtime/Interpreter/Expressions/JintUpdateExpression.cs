@@ -163,7 +163,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                     }
                 }
 
-                environmentRecord.SetMutableBinding(name.Key.Name, newValue!, strict);
+                environmentRecord.SetMutableBinding(name.Key, newValue!, strict);
                 if (_prefix)
                 {
                     return newValue;

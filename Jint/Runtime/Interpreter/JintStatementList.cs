@@ -189,7 +189,7 @@ namespace Jint.Runtime.Interpreter
                 d.GetBoundNames(boundNames);
                 for (var j = 0; j < boundNames.Count; j++)
                 {
-                    var dn = boundNames[j];
+                    var dn = (Key) boundNames[j];
                     if (d is VariableDeclaration { Kind: VariableDeclarationKind.Const })
                     {
                         env.CreateImmutableBinding(dn, strict: true);
@@ -203,7 +203,7 @@ namespace Jint.Runtime.Interpreter
                 if (d is FunctionDeclaration functionDeclaration)
                 {
                     var definition = new JintFunctionDefinition(functionDeclaration);
-                    var fn = definition.Name!;
+                    var fn = (Key) definition.Name!;
                     var fo = env._engine.Realm.Intrinsics.Function.InstantiateFunctionObject(definition, env, privateEnv);
                     env.InitializeBinding(fn, fo);
                 }

@@ -173,7 +173,7 @@ internal sealed class ModuleNamespace : ObjectInstance
             ExceptionHelper.ThrowReferenceError(_engine.Realm, "Module's environment hasn't been initialized");
         }
 
-        return targetEnv.GetBindingValue(binding.BindingName, true);
+        return targetEnv.GetBindingValue((Key) binding.BindingName, true);
     }
 
     /// <summary>

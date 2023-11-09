@@ -112,7 +112,7 @@ namespace Jint.Runtime.Interpreter.Statements
                 var TDZEnvRec = tdz;
                 foreach (var name in _tdzNames)
                 {
-                    TDZEnvRec.CreateMutableBinding(name);
+                    TDZEnvRec.CreateMutableBinding((Key) name);
                 }
             }
 
@@ -203,7 +203,7 @@ namespace Jint.Runtime.Interpreter.Statements
                         {
                             var identifier = (Identifier) ((VariableDeclaration) _leftNode).Declarations[0].Id;
                             lhsName ??= identifier.Name;
-                            lhsRef = engine.ResolveBinding(lhsName);
+                            lhsRef = engine.ResolveBinding((Key) lhsName);
                         }
                     }
 
@@ -332,7 +332,7 @@ namespace Jint.Runtime.Interpreter.Statements
             variableDeclaration.GetBoundNames(boundNames);
             for (var i = 0; i < boundNames.Count; i++)
             {
-                var name = boundNames[i];
+                var name = (Key) boundNames[i];
                 if (variableDeclaration.Kind == VariableDeclarationKind.Const)
                 {
                     envRec.CreateImmutableBinding(name, strict: true);

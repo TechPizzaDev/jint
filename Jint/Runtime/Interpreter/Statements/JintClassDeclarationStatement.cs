@@ -26,7 +26,7 @@ namespace Jint.Runtime.Interpreter.Statements
             var classBinding = _classDefinition._className;
             if (classBinding != null)
             {
-                env.InitializeBinding(classBinding, value);
+                env.InitializeBinding((Key) classBinding, value);
             }
 
             return new Completion(CompletionType.Normal, null!, _statement);

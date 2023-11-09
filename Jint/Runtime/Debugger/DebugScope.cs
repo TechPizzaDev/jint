@@ -54,7 +54,7 @@ namespace Jint.Runtime.Debugger
         /// </summary>
         /// <param name="name">Binding name</param>
         /// <returns>Value of the binding</returns>
-        public JsValue? GetBindingValue(string name)
+        public JsValue? GetBindingValue(Key name)
         {
             _record.TryGetBinding(new EnvironmentRecord.BindingName(name), strict: true, out _, out var result);
             return result;
@@ -65,7 +65,7 @@ namespace Jint.Runtime.Debugger
         /// </summary>
         /// <param name="name">Binding name</param>
         /// <param name="value">New value of the binding</param>
-        public void SetBindingValue(string name, JsValue value)
+        public void SetBindingValue(Key name, JsValue value)
         {
             _record.SetMutableBinding(name, value, strict: true);
         }

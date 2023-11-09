@@ -50,7 +50,7 @@ namespace Jint.Runtime.Interpreter.Expressions
             if (!string.IsNullOrWhiteSpace(name))
             {
                 funcEnv = JintEnvironment.NewDeclarativeEnvironment(engine, engine.ExecutionContext.LexicalEnvironment);
-                funcEnv.CreateImmutableBinding(name!, strict: false);
+                funcEnv.CreateImmutableBinding((Key) name!, strict: false);
             }
 
             var privateEnv = runningExecutionContext.PrivateEnvironment;
@@ -70,11 +70,11 @@ namespace Jint.Runtime.Interpreter.Expressions
 
             if (name is not null)
             {
-                closure.SetFunctionName(name);
+                closure.SetFunctionName(JsString.Create(name));
             }
             closure.MakeConstructor();
 
-            funcEnv?.InitializeBinding(name!, closure);
+            funcEnv?.InitializeBinding((Key) name!, closure);
 
             return closure;
         }
@@ -92,7 +92,7 @@ namespace Jint.Runtime.Interpreter.Expressions
             if (!string.IsNullOrWhiteSpace(name))
             {
                 funcEnv = JintEnvironment.NewDeclarativeEnvironment(engine, engine.ExecutionContext.LexicalEnvironment);
-                funcEnv.CreateImmutableBinding(name!, strict: false);
+                funcEnv.CreateImmutableBinding((Key) name!, strict: false);
             }
 
             var privateScope = runningExecutionContext.PrivateEnvironment;
@@ -112,7 +112,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
             closure.SetFunctionName(name ?? "");
 
-            funcEnv?.InitializeBinding(name!, closure);
+            funcEnv?.InitializeBinding((Key) name!, closure);
 
             return closure;
         }

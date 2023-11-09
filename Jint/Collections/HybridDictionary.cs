@@ -65,6 +65,12 @@ namespace Jint.Collections
             }
         }
 
+        public TValue this[string key]
+        {
+            get => this[(Key) key];
+            set => this[(Key) key] = value;
+        }
+
         public bool TryGetValue(Key key, out TValue value)
         {
             if (_dictionary != null)

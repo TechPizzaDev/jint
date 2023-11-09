@@ -45,7 +45,7 @@ namespace Jint.Native.Function
             : this(
                 engine,
                 realm,
-                !string.IsNullOrWhiteSpace(function.Name) ? new JsString(function.Name!) : null,
+                !string.IsNullOrWhiteSpace(function.Name) ? JsString.Create(function.Name!) : null,
                 thisMode)
         {
             _functionDefinition = function;

@@ -226,11 +226,12 @@ internal class SourceTextModuleRecord : CyclicModuleRecord
             {
                 var ie = _importEntries[i];
                 var importedModule = _engine._host.ResolveImportedModule(this, ie.ModuleRequest);
+                var key = (Key) ie.LocalName;
                 if (ie.ImportName == "*")
                 {
                     var ns = GetModuleNamespace(importedModule);
-                    env.CreateImmutableBinding(ie.LocalName, true);
-                    env.InitializeBinding(ie.LocalName, ns);
+                    env.CreateImmutableBinding(key, true);
+                    env.InitializeBinding(key, ns);
                 }
                 else
                 {
@@ -243,12 +244,12 @@ internal class SourceTextModuleRecord : CyclicModuleRecord
                     if (resolution.BindingName == "*namespace*")
                     {
                         var ns = GetModuleNamespace(resolution.Module);
-                        env.CreateImmutableBinding(ie.LocalName, true);
-                        env.InitializeBinding(ie.LocalName, ns);
+                        env.CreateImmutableBinding(key, true);
+                        env.InitializeBinding(key, ns);
                     }
                     else
                     {
-                        env.CreateImportBinding(ie.LocalName, resolution.Module, resolution.BindingName);
+                        env.CreateImportBinding(key, resolution.Module, resolution.BindingName);
                     }
                 }
             }
@@ -262,7 +263,7 @@ internal class SourceTextModuleRecord : CyclicModuleRecord
         var hoistingScope = HoistingScope.GetModuleLevelDeclarations(_source);
 
         var varDeclarations = hoistingScope._variablesDeclarations;
-        var declaredVarNames = new HashSet<string>();
+        var declaredVarNames = new HashSet<Key>();
         if (varDeclarations != null)
         {
             var boundNames = new List<string>();
@@ -273,7 +274,7 @@ internal class SourceTextModuleRecord : CyclicModuleRecord
                 d.GetBoundNames(boundNames);
                 for (var j = 0; j < boundNames.Count; j++)
                 {
-                    var dn = boundNames[j];
+                    var dn = (Key) boundNames[j];
                     if (declaredVarNames.Add(dn))
                     {
                         env.CreateMutableBinding(dn, false);
@@ -295,7 +296,7 @@ internal class SourceTextModuleRecord : CyclicModuleRecord
                 d.GetBoundNames(boundNames);
                 for (var j = 0; j < boundNames.Count; j++)
                 {
-                    var dn = boundNames[j];
+                    var dn = (Key) boundNames[j];
                     if (d.IsConstantDeclaration())
                     {
                         env.CreateImmutableBinding(dn, true);
@@ -315,7 +316,7 @@ internal class SourceTextModuleRecord : CyclicModuleRecord
             for (var i = 0; i < functionDeclarations.Count; i++)
             {
                 var d = functionDeclarations[i];
-                var fn = d.Id?.Name ?? "*default*";
+                var fn = (Key) (d.Id?.Name ?? "*default*");
                 var fd = new JintFunctionDefinition(d);
                 env.CreateMutableBinding(fn, true);
                 // TODO private scope

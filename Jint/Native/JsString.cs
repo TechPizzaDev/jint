@@ -60,9 +60,8 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
         _value = value;
     }
 
-    public JsString(char value) : base(Types.String)
+    public JsString(char value) : this(value.ToString(), InternalTypes.String)
     {
-        _value = value.ToString();
     }
 
     public static bool operator ==(JsString? a, JsString? b)
@@ -127,21 +126,19 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
 
     internal static JsString Create(string value)
     {
-        if (value.Length > 1)
+        if (value.Length <= 1)
         {
-            return new JsString(value);
-        }
+            if (value.Length == 0)
+            {
+                return Empty;
+            }
 
-        if (value.Length == 0)
-        {
-            return Empty;
-        }
-
-        var i = (uint) value[0];
-        var temp = _charToStringJsValue;
-        if (i < (uint) temp.Length)
-        {
-            return temp[i];
+            var i = (uint) value[0];
+            var temp = _charToStringJsValue;
+            if (i < (uint) temp.Length)
+            {
+                return temp[i];
+            }
         }
         return new JsString(value);
     }

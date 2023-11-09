@@ -105,6 +105,6 @@ public sealed class Reference
 
     internal void InitializeReferencedBinding(JsValue value)
     {
-        ((EnvironmentRecord) _base).InitializeBinding(TypeConverter.ToString(_referencedName), value);
+        ((EnvironmentRecord) _base).InitializeBinding((Key) TypeConverter.ToString(_referencedName), value);
     }
 }

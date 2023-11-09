@@ -76,7 +76,7 @@ namespace Jint.Runtime.Interpreter.Statements
 
                 foreach (var argName in boundNames)
                 {
-                    catchEnv.CreateMutableBinding(argName, false);
+                    catchEnv.CreateMutableBinding((Key) argName, false);
                 }
 
                 engine.UpdateLexicalEnvironment(catchEnv);

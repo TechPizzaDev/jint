@@ -459,7 +459,7 @@ for (let i = 0; i < 10; i++)
                 {
                     // Here is where we would normally pause the execution.
                     // the breakpoint is hit for the fifth time, when i is 4 (off by one)
-                    Assert.Equal(4, info.CurrentScopeChain[0].GetBindingValue("i").AsInteger());
+                    Assert.Equal(4, info.CurrentScopeChain[0].GetBindingValue((Key) "i").AsInteger());
                     numberOfBreaks++;
                 }
                 return StepMode.None;

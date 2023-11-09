@@ -50,8 +50,9 @@ internal sealed class JintExportDefaultDeclaration : JintStatement<ExportDefault
             var classBinding = _classDefinition._className;
             if (classBinding != null)
             {
-                env.CreateMutableBinding(classBinding);
-                env.InitializeBinding(classBinding, value);
+                var key = (Key) classBinding;
+                env.CreateMutableBinding(key);
+                env.InitializeBinding(key, value);
             }
         }
         else if (_functionDeclaration is not null)
@@ -73,14 +74,14 @@ internal sealed class JintExportDefaultDeclaration : JintStatement<ExportDefault
             functionInstance.SetFunctionName("default");
         }
 
-        env.InitializeBinding("*default*", value);
+        env.InitializeBinding((Key) "*default*", value);
         return Completion.Empty();
     }
 
     /// <summary>
     /// https://tc39.es/ecma262/#sec-initializeboundname
     /// </summary>
-    private void InitializeBoundName(string name, JsValue value, EnvironmentRecord? environment)
+    private void InitializeBoundName(Key name, JsValue value, EnvironmentRecord? environment)
     {
         if (environment is not null)
         {

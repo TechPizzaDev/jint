@@ -237,7 +237,7 @@ namespace Jint
                                 {
                                     if (declaration.Id is Identifier identifier)
                                     {
-                                        _varNames.Add(identifier.Name);
+                                        _varNames.Add((Key) identifier.Name);
                                     }
                                 }
                             }

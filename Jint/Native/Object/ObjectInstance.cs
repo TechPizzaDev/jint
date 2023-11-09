@@ -154,19 +154,12 @@ namespace Jint.Native.Object
         {
             if (property is JsString jsString)
             {
-                SetProperty(jsString.ToString(), value);
+                SetProperty((Key) jsString.ToString(), value);
             }
             else
             {
                 SetPropertyUnlikely(property, value);
             }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void SetProperty(string property, PropertyDescriptor value)
-        {
-            Key key = property;
-            SetProperty(key, value);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -177,7 +170,7 @@ namespace Jint.Native.Object
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void SetDataProperty(string property, JsValue value)
+        internal void SetDataProperty(Key property, JsValue value)
         {
             _properties ??= new PropertyDictionary();
             _properties[property] = new PropertyDescriptor(value, PropertyFlag.ConfigurableEnumerableWritable);
@@ -190,7 +183,7 @@ namespace Jint.Native.Object
             if (!property.IsSymbol())
             {
                 _properties ??= new PropertyDictionary();
-                _properties[TypeConverter.ToString(propertyKey)] = value;
+                _properties[(Key) TypeConverter.ToString(propertyKey)] = value;
             }
             else
             {
@@ -335,7 +328,7 @@ namespace Jint.Native.Object
             var key = TypeConverter.ToPropertyKey(property);
             if (!key.IsSymbol())
             {
-                return _properties?.TryGetValue(TypeConverter.ToString(key), out descriptor) == true;
+                return _properties?.TryGetValue((Key) TypeConverter.ToString(key), out descriptor) == true;
             }
 
             return _symbols?.TryGetValue((JsSymbol) key, out descriptor) == true;
@@ -354,7 +347,7 @@ namespace Jint.Native.Object
             var key = TypeConverter.ToPropertyKey(property);
             if (!key.IsSymbol())
             {
-                _properties?.Remove(TypeConverter.ToString(key));
+                _properties?.Remove((Key) TypeConverter.ToString(key));
                 return;
             }
 
@@ -366,7 +359,7 @@ namespace Jint.Native.Object
             if ((_type & InternalTypes.PlainObject) != 0 && ReferenceEquals(this, receiver) && property is JsString jsString)
             {
                 EnsureInitialized();
-                if (_properties?.TryGetValue(jsString.ToString(), out var ownDesc) == true)
+                if (_properties?.TryGetValue((Key) jsString.ToString(), out var ownDesc) == true)
                 {
                     return UnwrapJsValue(ownDesc, receiver);
                 }
@@ -434,7 +427,7 @@ namespace Jint.Native.Object
             var key = TypeConverter.ToPropertyKey(property);
             if (!key.IsSymbol())
             {
-                _properties?.TryGetValue(TypeConverter.ToString(key), out descriptor);
+                _properties?.TryGetValue((Key) TypeConverter.ToString(key), out descriptor);
             }
             else
             {
@@ -1057,7 +1050,7 @@ namespace Jint.Native.Object
                         converted = result;
                         break;
                     }
-                    
+
                     if (this is JsTypedArray typedArrayInstance)
                     {
                         converted = typedArrayInstance._arrayElementType switch
@@ -1677,14 +1670,14 @@ namespace Jint.Native.Object
                     var i = 0;
                     if (_obj._properties is not null)
                     {
-                        foreach(var key in _obj._properties)
+                        foreach (var key in _obj._properties)
                         {
                             keys[i++] = new KeyValuePair<JsValue, JsValue>(key.Key.Name, UnwrapJsValue(key.Value, _obj));
                         }
                     }
                     if (_obj._symbols is not null)
                     {
-                        foreach(var key in _obj._symbols)
+                        foreach (var key in _obj._symbols)
                         {
                             keys[i++] = new KeyValuePair<JsValue, JsValue>(key.Key, UnwrapJsValue(key.Value, _obj));
                         }

@@ -33,7 +33,7 @@ internal sealed class JintIdentifierExpression : JintExpression
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void EnsureIdentifier()
     {
-        _identifier ??= _expression.AssociatedData as EnvironmentRecord.BindingName ?? new EnvironmentRecord.BindingName(((Identifier) _expression).Name);
+        _identifier ??= _expression.AssociatedData as EnvironmentRecord.BindingName ?? new EnvironmentRecord.BindingName((Key) ((Identifier) _expression).Name);
     }
 
     public bool HasEvalOrArguments

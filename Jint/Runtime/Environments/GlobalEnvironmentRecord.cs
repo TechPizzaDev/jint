@@ -40,7 +40,7 @@ namespace Jint.Runtime.Environments
 
         public ObjectInstance GlobalThisValue => _global;
 
-        public override bool HasBinding(string name)
+        public override bool HasBinding(Key name)
         {
             if (_declarativeRecord.HasBinding(name))
             {
@@ -123,7 +123,7 @@ namespace Jint.Runtime.Environments
         /// <summary>
         /// https://tc39.es/ecma262/#sec-global-environment-records-createmutablebinding-n-d
         /// </summary>
-        public override void CreateMutableBinding(string name, bool canBeDeleted = false)
+        public override void CreateMutableBinding(Key name, bool canBeDeleted = false)
         {
             if (_declarativeRecord.HasBinding(name))
             {
@@ -136,7 +136,7 @@ namespace Jint.Runtime.Environments
         /// <summary>
         /// https://tc39.es/ecma262/#sec-global-environment-records-createimmutablebinding-n-s
         /// </summary>
-        public override void CreateImmutableBinding(string name, bool strict = true)
+        public override void CreateImmutableBinding(Key name, bool strict = true)
         {
             if (_declarativeRecord.HasBinding(name))
             {
@@ -152,7 +152,7 @@ namespace Jint.Runtime.Environments
             ExceptionHelper.ThrowTypeError(_engine.Realm, name + " has already been declared");
         }
 
-        public override void InitializeBinding(string name, JsValue value)
+        public override void InitializeBinding(Key name, JsValue value)
         {
             if (_declarativeRecord.HasBinding(name))
             {
@@ -164,7 +164,7 @@ namespace Jint.Runtime.Environments
             }
         }
 
-        public override void SetMutableBinding(string name, JsValue value, bool strict)
+        public override void SetMutableBinding(Key name, JsValue value, bool strict)
         {
             if (_declarativeRecord.HasBinding(name))
             {
@@ -222,7 +222,7 @@ namespace Jint.Runtime.Environments
             _global.Set(jsString, value);
         }
 
-        public override JsValue GetBindingValue(string name, bool strict)
+        public override JsValue GetBindingValue(Key name, bool strict)
         {
             if (_declarativeRecord.HasBinding(name))
             {
@@ -240,7 +240,7 @@ namespace Jint.Runtime.Environments
             }
             else
             {
-                desc = _global.GetProperty(name);
+                desc = _global.GetProperty(name.ToString());
             }
 
             if (strict && desc == PropertyDescriptor.Undefined)
@@ -251,16 +251,17 @@ namespace Jint.Runtime.Environments
             return ObjectInstance.UnwrapJsValue(desc, _global);
         }
 
-        public override bool DeleteBinding(string name)
+        public override bool DeleteBinding(Key name)
         {
             if (_declarativeRecord.HasBinding(name))
             {
                 return _declarativeRecord.DeleteBinding(name);
             }
 
-            if (_global.HasOwnProperty(name))
+            var value = JsString.Create(name.ToString());
+            if (_global.HasOwnProperty(value))
             {
-                var status = _global.Delete(name);
+                var status = _global.Delete(value);
                 if (status)
                 {
                     _varNames.Remove(name);
@@ -292,17 +293,17 @@ namespace Jint.Runtime.Environments
             return _global;
         }
 
-        public bool HasVarDeclaration(string name)
+        public bool HasVarDeclaration(Key name)
         {
             return _varNames.Contains(name);
         }
 
-        public bool HasLexicalDeclaration(string name)
+        public bool HasLexicalDeclaration(Key name)
         {
             return _declarativeRecord.HasBinding(name);
         }
 
-        public bool HasRestrictedGlobalProperty(string name)
+        public bool HasRestrictedGlobalProperty(Key name)
         {
             if (_globalObject is not null)
             {
@@ -310,7 +311,7 @@ namespace Jint.Runtime.Environments
                        && !desc.Configurable;
             }
 
-            var existingProp = _global.GetOwnProperty(name);
+            var existingProp = _global.GetOwnProperty(name.ToString());
             if (existingProp == PropertyDescriptor.Undefined)
             {
                 return false;
@@ -319,7 +320,7 @@ namespace Jint.Runtime.Environments
             return !existingProp.Configurable;
         }
 
-        public bool CanDeclareGlobalVar(string name)
+        public bool CanDeclareGlobalVar(Key name)
         {
             if (_global._properties!.ContainsKey(name))
             {
@@ -329,7 +330,7 @@ namespace Jint.Runtime.Environments
             return _global.Extensible;
         }
 
-        public bool CanDeclareGlobalFunction(string name)
+        public bool CanDeclareGlobalFunction(Key name)
         {
             if (!_global._properties!.TryGetValue(name, out var existingProp)
                 || existingProp == PropertyDescriptor.Undefined)
@@ -350,10 +351,9 @@ namespace Jint.Runtime.Environments
             return false;
         }
 
-        public void CreateGlobalVarBinding(string name, bool canBeDeleted)
+        public void CreateGlobalVarBinding(Key name, bool canBeDeleted)
         {
-            Key key = name;
-            if (_global.Extensible && _global._properties!.TryAdd(key, new PropertyDescriptor(Undefined, canBeDeleted
+            if (_global.Extensible && _global._properties!.TryAdd(name, new PropertyDescriptor(Undefined, canBeDeleted
                     ? PropertyFlag.ConfigurableEnumerableWritable | PropertyFlag.MutableBinding
                     : PropertyFlag.NonConfigurable | PropertyFlag.MutableBinding)))
             {
@@ -361,7 +361,7 @@ namespace Jint.Runtime.Environments
             }
         }
 
-        internal void CreateGlobalVarBindings(List<string> names, bool canBeDeleted)
+        internal void CreateGlobalVarBindings(List<Key> names, bool canBeDeleted)
         {
             if (!_global.Extensible)
             {
@@ -372,7 +372,7 @@ namespace Jint.Runtime.Environments
             {
                 var name = names[i];
 
-                _global._properties!.TryAdd(name,new PropertyDescriptor(Undefined, canBeDeleted
+                _global._properties!.TryAdd(name, new PropertyDescriptor(Undefined, canBeDeleted
                     ? PropertyFlag.ConfigurableEnumerableWritable | PropertyFlag.MutableBinding
                     : PropertyFlag.NonConfigurable | PropertyFlag.MutableBinding));
 
@@ -383,7 +383,7 @@ namespace Jint.Runtime.Environments
         /// <summary>
         /// https://tc39.es/ecma262/#sec-createglobalfunctionbinding
         /// </summary>
-        public void CreateGlobalFunctionBinding(string name, JsValue value, bool canBeDeleted)
+        public void CreateGlobalFunctionBinding(Key name, JsValue value, bool canBeDeleted)
         {
             var jsString = new JsString(name);
             var existingProp = _global.GetOwnProperty(jsString);

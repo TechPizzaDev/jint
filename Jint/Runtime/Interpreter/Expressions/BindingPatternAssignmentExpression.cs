@@ -437,7 +437,7 @@ namespace Jint.Runtime.Interpreter.Expressions
             EnvironmentRecord? environment,
             bool checkReference = true)
         {
-            var lhs = engine.ResolveBinding(name, environment);
+            var lhs = engine.ResolveBinding((Key) name, environment);
             if (environment is not null)
             {
                 lhs.InitializeReferencedBinding(rval);

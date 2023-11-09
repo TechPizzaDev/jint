@@ -27,7 +27,7 @@ namespace Jint.Runtime.Environments
             _withEnvironment = withEnvironment;
         }
 
-        public override bool HasBinding(string name)
+        public override bool HasBinding(Key name)
         {
             var property = new JsString(name);
             var foundBinding = HasProperty(property);
@@ -42,7 +42,7 @@ namespace Jint.Runtime.Environments
                 return true;
             }
 
-            return !IsBlocked(name);
+            return !IsBlocked(property);
         }
 
         internal override bool HasBinding(BindingName name)
@@ -111,9 +111,9 @@ namespace Jint.Runtime.Environments
         /// <summary>
         /// http://www.ecma-international.org/ecma-262/6.0/#sec-object-environment-records-createmutablebinding-n-d
         /// </summary>
-        public override void CreateMutableBinding(string name, bool canBeDeleted = false)
+        public override void CreateMutableBinding(Key name, bool canBeDeleted = false)
         {
-            _bindingObject.DefinePropertyOrThrow(name, new PropertyDescriptor(Undefined, canBeDeleted
+            _bindingObject.DefinePropertyOrThrow(JsString.Create(name), new PropertyDescriptor(Undefined, canBeDeleted
                 ? PropertyFlag.ConfigurableEnumerableWritable | PropertyFlag.MutableBinding
                 : PropertyFlag.NonConfigurable | PropertyFlag.MutableBinding));
         }
@@ -121,7 +121,7 @@ namespace Jint.Runtime.Environments
         /// <summary>
         /// https://tc39.es/ecma262/#sec-object-environment-records-createimmutablebinding-n-s
         /// </summary>
-        public override void CreateImmutableBinding(string name, bool strict = true)
+        public override void CreateImmutableBinding(Key name, bool strict = true)
         {
             ExceptionHelper.ThrowInvalidOperationException("The concrete Environment Record method CreateImmutableBinding is never used within this specification in association with Object Environment Records.");
         }
@@ -129,12 +129,12 @@ namespace Jint.Runtime.Environments
         /// <summary>
         /// https://tc39.es/ecma262/#sec-object-environment-records-initializebinding-n-v
         /// </summary>
-        public override void InitializeBinding(string name, JsValue value)
+        public override void InitializeBinding(Key name, JsValue value)
         {
             SetMutableBinding(name, value, false);
         }
 
-        public override void SetMutableBinding(string name, JsValue value, bool strict)
+        public override void SetMutableBinding(Key name, JsValue value, bool strict)
         {
             var jsString = new JsString(name);
             if (strict && !_bindingObject.HasProperty(jsString))
@@ -155,9 +155,9 @@ namespace Jint.Runtime.Environments
             _bindingObject.Set(name.Value, value);
         }
 
-        public override JsValue GetBindingValue(string name, bool strict)
+        public override JsValue GetBindingValue(Key name, bool strict)
         {
-            var desc = _bindingObject.GetProperty(name);
+            var desc = _bindingObject.GetProperty(JsString.Create(name));
             if (strict && desc == PropertyDescriptor.Undefined)
             {
                 ExceptionHelper.ThrowReferenceNameError(_engine.Realm, name);
@@ -166,9 +166,9 @@ namespace Jint.Runtime.Environments
             return ObjectInstance.UnwrapJsValue(desc, _bindingObject);
         }
 
-        public override bool DeleteBinding(string name)
+        public override bool DeleteBinding(Key name)
         {
-            return _bindingObject.Delete(name);
+            return _bindingObject.Delete(JsString.Create(name));
         }
 
         public override bool HasThisBinding() => false;

@@ -10,7 +10,7 @@ namespace Jint.Tests.Runtime.Debugger
             var containingScope = Assert.Single(scopes, s => s.ScopeType == scopeType && s.BindingNames.Contains(name));
             Assert.DoesNotContain(scopes, s => s != containingScope && s.BindingNames.Contains(name));
 
-            return containingScope.GetBindingValue(name);
+            return containingScope.GetBindingValue((Key) name);
         }
 
         private static void AssertScope(DebugScope actual, DebugScopeType expectedType, params string[] expectedBindingNames)
@@ -39,8 +39,8 @@ namespace Jint.Tests.Runtime.Debugger
             TestHelpers.TestAtBreak(script, info =>
             {
                 // Uninitialized global block scoped ("script scoped") bindings return null (and, just as importantly, don't throw):
-                Assert.Null(info.CurrentScopeChain[0].GetBindingValue("globalConstant"));
-                Assert.Null(info.CurrentScopeChain[0].GetBindingValue("globalLet"));
+                Assert.Null(info.CurrentScopeChain[0].GetBindingValue((Key) "globalConstant"));
+                Assert.Null(info.CurrentScopeChain[0].GetBindingValue((Key) "globalLet"));
             });
         }
 
@@ -60,8 +60,8 @@ namespace Jint.Tests.Runtime.Debugger
             TestHelpers.TestAtBreak(script, info =>
             {
                 // Uninitialized block scoped bindings return null (and, just as importantly, don't throw):
-                Assert.Null(info.CurrentScopeChain[0].GetBindingValue("globalConstant"));
-                Assert.Null(info.CurrentScopeChain[0].GetBindingValue("globalLet"));
+                Assert.Null(info.CurrentScopeChain[0].GetBindingValue((Key) "globalConstant"));
+                Assert.Null(info.CurrentScopeChain[0].GetBindingValue((Key) "globalLet"));
             });
         }
 

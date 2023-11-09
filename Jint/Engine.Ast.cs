@@ -42,7 +42,7 @@ public partial class Engine
 
     private sealed class AstAnalyzer
     {
-        private readonly Dictionary<string, EnvironmentRecord.BindingName> _bindingNames = new();
+        private readonly Dictionary<Key, EnvironmentRecord.BindingName> _bindingNames = new();
 
         public void NodeVisitor(Node node)
         {
@@ -50,7 +50,7 @@ public partial class Engine
             {
                 case Nodes.Identifier:
                     {
-                        var name = ((Identifier) node).Name;
+                        var name = (Key) ((Identifier) node).Name;
 
                         if (!_bindingNames.TryGetValue(name, out var bindingName))
                         {

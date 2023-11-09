@@ -147,7 +147,7 @@ namespace Jint.Runtime.Environments
             if (parameter is Identifier identifier)
             {
                 var argument = arguments.At(index);
-                SetItemSafely(identifier.Name, argument, initiallyEmpty);
+                SetItemSafely((Key) identifier.Name, argument, initiallyEmpty);
             }
             else
             {
@@ -223,7 +223,7 @@ namespace Jint.Runtime.Environments
                         {
                             var rest = _engine.Realm.Intrinsics.Object.Construct((argumentObject.Properties?.Count ?? 0) - processedProperties!.Count);
                             argumentObject.CopyDataProperties(rest, processedProperties);
-                            SetItemSafely(restIdentifier.Name, rest, initiallyEmpty);
+                            SetItemSafely((Key) restIdentifier.Name, rest, initiallyEmpty);
                         }
                         else
                         {
@@ -298,7 +298,7 @@ namespace Jint.Runtime.Environments
             var array = new JsArray(_engine, rest);
             if (restElement.Argument is Identifier restIdentifier)
             {
-                SetItemSafely(restIdentifier.Name, array, initiallyEmpty);
+                SetItemSafely((Key) restIdentifier.Name, array, initiallyEmpty);
             }
             else if (restElement.Argument is BindingPattern bindingPattern)
             {
