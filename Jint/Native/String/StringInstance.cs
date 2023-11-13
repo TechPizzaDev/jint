@@ -35,12 +35,12 @@ internal class StringInstance : ObjectInstance, IPrimitiveInstance
 
     public sealed override PropertyDescriptor GetOwnProperty(JsValue property)
     {
-        if (property == CommonProperties.Infinity)
+        if (CommonProperties.Infinity.Equals(property))
         {
             return PropertyDescriptor.Undefined;
         }
 
-        if (property == CommonProperties.Length)
+        if (CommonProperties.Length.Equals(property))
         {
             return _length ?? PropertyDescriptor.Undefined;
         }
@@ -51,7 +51,7 @@ internal class StringInstance : ObjectInstance, IPrimitiveInstance
             return desc;
         }
 
-        if ((property._type & (InternalTypes.Number | InternalTypes.Integer | InternalTypes.String)) == 0)
+        if ((property._type & (InternalTypes.Number | InternalTypes.Integer | InternalTypes.String)) == InternalTypes.None)
         {
             return PropertyDescriptor.Undefined;
         }
@@ -84,10 +84,10 @@ internal class StringInstance : ObjectInstance, IPrimitiveInstance
         yield return JsString.LengthString;
     }
 
-    public sealed override List<JsValue> GetOwnPropertyKeys(Types types)
+    public sealed override List<JsValue> GetOwnPropertyKeys(Types types = Types.String | Types.Symbol)
     {
         var keys = new List<JsValue>(StringData.Length + 1);
-        if ((types & Types.String) != 0)
+        if ((types & Types.String) != Types.None)
         {
             for (uint i = 0; i < StringData.Length; ++i)
             {
@@ -97,7 +97,7 @@ internal class StringInstance : ObjectInstance, IPrimitiveInstance
             keys.AddRange(base.GetOwnPropertyKeys(Types.String));
         }
 
-        if ((types & Types.Symbol) != 0)
+        if ((types & Types.Symbol) != Types.None)
         {
             keys.AddRange(base.GetOwnPropertyKeys(Types.Symbol));
         }
@@ -107,7 +107,7 @@ internal class StringInstance : ObjectInstance, IPrimitiveInstance
 
     protected internal sealed override void SetOwnProperty(JsValue property, PropertyDescriptor desc)
     {
-        if (property == CommonProperties.Length)
+        if (CommonProperties.Length.Equals(property))
         {
             _length = desc;
         }
@@ -119,7 +119,7 @@ internal class StringInstance : ObjectInstance, IPrimitiveInstance
 
     public sealed override void RemoveOwnProperty(JsValue property)
     {
-        if (property == CommonProperties.Length)
+        if (CommonProperties.Length.Equals(property))
         {
             _length = null;
         }

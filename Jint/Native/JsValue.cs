@@ -334,12 +334,12 @@ namespace Jint.Native
                 return x.IsLooselyEqual(TypeConverter.ToNumber(y));
             }
 
-            if (y.IsObject() && (x._type & InternalTypes.Primitive) != 0)
+            if (y.IsObject() && (x._type & InternalTypes.Primitive) != InternalTypes.None)
             {
                 return x.IsLooselyEqual(TypeConverter.ToPrimitive(y));
             }
 
-            if (x.IsObject() && (y._type & InternalTypes.Primitive) != 0)
+            if (x.IsObject() && (y._type & InternalTypes.Primitive) != InternalTypes.None)
             {
                 return y.IsLooselyEqual(TypeConverter.ToPrimitive(x));
             }
@@ -350,23 +350,14 @@ namespace Jint.Native
         /// <summary>
         /// Strict equality.
         /// </summary>
-        public override bool Equals(object? obj)
-        {
-            return Equals(obj as JsValue);
-        }
+        public override bool Equals(object? obj) => Equals(obj as JsValue);
 
         /// <summary>
         /// Strict equality.
         /// </summary>
-        public virtual bool Equals(JsValue? other)
-        {
-            return ReferenceEquals(this, other);
-        }
+        public virtual bool Equals(JsValue? other) => ReferenceEquals(this, other);
 
-        public override int GetHashCode()
-        {
-            return _type.GetHashCode();
-        }
+        public override int GetHashCode() => _type.GetHashCode();
 
         /// <summary>
         /// Some values need to be cloned in order to be assigned, like ConcatenatedString.
@@ -375,7 +366,7 @@ namespace Jint.Native
         internal JsValue Clone()
         {
             // concatenated string and arguments currently may require cloning
-            return (_type & InternalTypes.RequiresCloning) == 0
+            return (_type & InternalTypes.RequiresCloning) == InternalTypes.None
                 ? this
                 : DoClone();
         }
@@ -467,7 +458,7 @@ namespace Jint.Native
 
                     return false;
                 case Types.String:
-                    return TypeConverter.ToString(x) == TypeConverter.ToString(y);
+                    return string.Equals(TypeConverter.ToString(x), TypeConverter.ToString(y), StringComparison.Ordinal);
                 case Types.Boolean:
                     return TypeConverter.ToBoolean(x) == TypeConverter.ToBoolean(y);
                 case Types.Undefined:

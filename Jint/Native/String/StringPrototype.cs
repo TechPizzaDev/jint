@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using Jint.Collections;
 using Jint.Native.Json;
@@ -228,7 +230,7 @@ namespace Jint.Native.String
         {
             TypeConverter.CheckObjectCoercible(_engine, thisObject);
             var s = TypeConverter.ToString(thisObject);
-            return new JsString(s.ToUpper());
+            return new JsString(s.ToUpper(CultureInfo.InvariantCulture));
         }
 
         private JsValue ToUpperCase(JsValue thisObject, JsValue[] arguments)
@@ -242,7 +244,7 @@ namespace Jint.Native.String
         {
             TypeConverter.CheckObjectCoercible(_engine, thisObject);
             var s = TypeConverter.ToString(thisObject);
-            return new JsString(s.ToLower());
+            return new JsString(s.ToLower(CultureInfo.InvariantCulture));
         }
 
         private JsValue ToLowerCase(JsValue thisObject, JsValue[] arguments)
@@ -350,7 +352,7 @@ namespace Jint.Native.String
             var limit = arguments.At(1);
 
             // fast path for empty regexp
-            if (separator is JsRegExp R && R.Source == JsRegExp.regExpForMatchingAllCharacters)
+            if (separator is JsRegExp R && string.Equals(R.Source, JsRegExp.regExpForMatchingAllCharacters, StringComparison.Ordinal))
             {
                 separator = JsString.Empty;
             }
@@ -666,7 +668,11 @@ namespace Jint.Native.String
 
             if (endOfLastMatch < thisString.Length)
             {
+#if NETFRAMEWORK
                 result.Append(thisString.Substring(endOfLastMatch));
+#else
+                result.Append(thisString[endOfLastMatch..]);
+#endif
             }
 
             return result.ToString();
@@ -868,6 +874,7 @@ namespace Jint.Native.String
             return CodePointAt(s, position).CodePoint;
         }
 
+        [StructLayout(LayoutKind.Auto)]
         private readonly record struct CodePointResult(int CodePoint, int CodeUnitCount, bool IsUnpairedSurrogate);
 
         private static CodePointResult CodePointAt(string s, int position)
@@ -1168,7 +1175,8 @@ namespace Jint.Native.String
                 var cp = CodePointAt(s, k);
                 if (cp.IsUnpairedSurrogate)
                 {
-                    result.Append("\uFFFD");
+                    // \uFFFD
+                    result.Append('�');
                 }
                 else
                 {

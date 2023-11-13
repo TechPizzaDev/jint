@@ -31,6 +31,7 @@ namespace Jint.Native.Date;
 using System;
 using System.Text;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 [Flags]
 internal enum DateTokenFlags : byte
@@ -46,6 +47,7 @@ internal enum DateTokenFlags : byte
     HasSign = (1 << 7),
 }
 
+[StructLayout(LayoutKind.Auto)]
 internal readonly struct DateToken
 {
     public DateToken(DateTokenFlags flags, int start, int length)
@@ -63,32 +65,32 @@ internal readonly struct DateToken
 
     public bool IsNumeric
     {
-        get { return (Flags & DateTokenFlags.NonNumeric) == 0; }
+        get { return (Flags & DateTokenFlags.NonNumeric) == DateTokenFlags.None; }
     }
 
     public bool IsWeekday
     {
-        get { return (Flags & DateTokenFlags.NonWeekday) == 0; }
+        get { return (Flags & DateTokenFlags.NonWeekday) == DateTokenFlags.None; }
     }
 
     public bool IsMonth
     {
-        get { return (Flags & DateTokenFlags.NonMonth) == 0; }
+        get { return (Flags & DateTokenFlags.NonMonth) == DateTokenFlags.None; }
     }
 
     public bool IsTimeOfDay
     {
-        get { return (Flags & DateTokenFlags.NonTime) == 0 && (Flags & DateTokenFlags.HasColon) != 0; }
+        get { return (Flags & DateTokenFlags.NonTime) == DateTokenFlags.None && (Flags & DateTokenFlags.HasColon) != DateTokenFlags.None; }
     }
 
     public bool IsNumericZone
     {
-        get { return (Flags & DateTokenFlags.NonNumericZone) == 0 && (Flags & DateTokenFlags.HasSign) != 0; }
+        get { return (Flags & DateTokenFlags.NonNumericZone) == DateTokenFlags.None && (Flags & DateTokenFlags.HasSign) != DateTokenFlags.None; }
     }
 
     public bool IsAlphaZone
     {
-        get { return (Flags & DateTokenFlags.NonAlphaZone) == 0; }
+        get { return (Flags & DateTokenFlags.NonAlphaZone) == DateTokenFlags.None; }
     }
 
     public bool IsTimeZone
@@ -180,6 +182,7 @@ internal static class DateUtils
                 any[1] = (char) c;
             }
 
+#pragma warning disable CA2249
             if (NumericZoneCharacters.IndexOf((char) c) == -1)
                 datetok[c] |= DateTokenFlags.NonNumericZone;
             if (AlphaZoneCharacters.IndexOf((char) c) == -1)
@@ -192,6 +195,7 @@ internal static class DateUtils
                 datetok[c] |= DateTokenFlags.NonMonth;
             if (TimeCharacters.IndexOf((char) c) == -1)
                 datetok[c] |= DateTokenFlags.NonTime;
+#pragma warning restore CA2249
         }
 
         datetok[':'] |= DateTokenFlags.HasColon;
@@ -518,7 +522,9 @@ internal static class DateUtils
                 int endIndex = tokens[i].Start + tokens[i].Length;
                 int index = tokens[i].Start;
 
+#pragma warning disable CA1806
                 ParseUtils.TryParseInt32(text, ref index, endIndex, out value);
+#pragma warning restore CA1806
 
                 if (month == null && value > 0 && value <= 12)
                 {
@@ -727,7 +733,11 @@ internal static class ParseUtils
             if (!SkipComment(text, ref index, endIndex))
             {
                 if (throwOnError)
-                    throw new Exception($"Incomplete comment token at offset {startIndex}");
+                {
+#pragma warning disable MA0015
+                    throw new ArgumentException($"Incomplete comment token at offset {startIndex}");
+#pragma warning restore MA0015
+                }
 
                 return false;
             }
@@ -808,7 +818,7 @@ internal static class ByteExtensions
             {
                 for (i = 0; i < 256; i++)
                 {
-                    if ((table[i] & bitcopy) != 0)
+                    if ((table[i] & bitcopy) != CharType.None)
                         table[i] |= bit;
                 }
             }
@@ -865,6 +875,6 @@ internal static class ByteExtensions
 
     public static bool IsWhitespace(this byte c)
     {
-        return (table[c] & CharType.IsWhitespace) != 0;
+        return (table[c] & CharType.IsWhitespace) != CharType.None;
     }
 }

@@ -148,7 +148,7 @@ internal sealed class JintFunctionDefinition
     /// <summary>
     /// https://tc39.es/ecma262/#sec-runtime-semantics-evaluategeneratorbody
     /// </summary>
-    private Completion EvaluateGeneratorBody(FunctionInstance functionObject, JsValue[] argumentsList)
+    private static Completion EvaluateGeneratorBody(FunctionInstance functionObject, JsValue[] argumentsList)
     {
         ExceptionHelper.ThrowNotImplementedException("generators not implemented");
         return default;
@@ -341,8 +341,8 @@ internal sealed class JintFunctionDefinition
         {
             var id = (Key) identifier.Name;
             _hasDuplicates |= checkDuplicates && target.Contains(id);
-            target.Add(id);
-            hasArguments |= identifier.Name == "arguments";
+            target.Add(id); 
+            hasArguments |= string.Equals(identifier.Name, "arguments", StringComparison.Ordinal);
             return;
         }
 
@@ -432,7 +432,7 @@ internal sealed class JintFunctionDefinition
             {
                 var id = (Key) ((Identifier) parameter).Name;
                 state.HasDuplicates |= parameterNames.Contains(id);
-                hasArguments = id == "arguments";
+                hasArguments = string.Equals(id.Name, "arguments", StringComparison.Ordinal);
                 parameterNames.Add(id);
             }
             else if (type != Nodes.Literal)
@@ -486,7 +486,7 @@ internal sealed class JintFunctionDefinition
                 var childType = childNode.Type;
                 if (childType == Nodes.Identifier)
                 {
-                    if (((Identifier) childNode).Name == "arguments")
+                    if (string.Equals(((Identifier) childNode).Name, "arguments", StringComparison.Ordinal))
                     {
                         return true;
                     }

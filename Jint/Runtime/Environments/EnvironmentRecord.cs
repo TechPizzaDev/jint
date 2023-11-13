@@ -133,6 +133,17 @@ namespace Jint.Runtime.Environments
                     Value = JsString.Create(value.ToString());
                 }
             }
+
+            public BindingName(JsString value)
+            {
+                var key = (Key) value.ToString();
+                Key = key;
+                Value = value;
+                if (key == KnownKeys.Undefined)
+                {
+                    CalculatedValue = Undefined;
+                }
+            }
         }
 
         private sealed class EnvironmentRecordDebugView

@@ -286,9 +286,11 @@ namespace Jint.Native.RegExp
 
                 if (position >= nextSourcePosition)
                 {
+#pragma warning disable CA1845
                     accumulatedResult = accumulatedResult +
                                         s.Substring(nextSourcePosition, position - nextSourcePosition) +
                                         replacement;
+#pragma warning restore CA1845
 
                     nextSourcePosition = position + matchLength;
                 }
@@ -299,7 +301,9 @@ namespace Jint.Native.RegExp
                 return accumulatedResult;
             }
 
+#pragma warning disable CA1845
             return accumulatedResult + s.Substring(nextSourcePosition);
+#pragma warning restore CA1845
         }
 
         private static string CallFunctionalReplace(JsValue replacer, List<JsValue> replacerArgs)
@@ -347,12 +351,14 @@ namespace Jint.Native.RegExp
                         case '&':
                             sb.Append(matched);
                             break;
+#pragma warning disable CA1846
                         case '`':
                             sb.Append(str.Substring(0, position));
                             break;
                         case '\'':
                             sb.Append(str.Substring(position + matched.Length));
                             break;
+#pragma warning restore CA1846
                         case '<':
                             var gtPos = replacement.IndexOf('>', i + 1);
                             if (gtPos == -1 || namedCaptures.IsUndefined())
@@ -467,7 +473,7 @@ namespace Jint.Native.RegExp
             {
                 // we can take faster path
 
-                if (R.Source == JsRegExp.regExpForMatchingAllCharacters)
+                if (string.Equals(R.Source, JsRegExp.regExpForMatchingAllCharacters, StringComparison.Ordinal))
                 {
                     // if empty string, just a string split
                     return StringPrototype.SplitWithStringSeparator(_realm, "", s, (uint) s.Length);
@@ -849,7 +855,7 @@ namespace Jint.Native.RegExp
                 lastIndex = 0;
             }
 
-            if (R.Source == JsRegExp.regExpForMatchingAllCharacters)  // Reg Exp is really ""
+            if (string.Equals(R.Source, JsRegExp.regExpForMatchingAllCharacters, StringComparison.Ordinal))  // Reg Exp is really ""
             {
                 if (lastIndex > (ulong) s.Length)
                 {

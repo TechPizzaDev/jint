@@ -199,10 +199,6 @@ namespace Jint.Runtime.Interpreter.Expressions
                         {
                             newLeftValue = JsValue.Undefined;
                         }
-                        else if (!AreIntegerOperands(originalLeftValue, rval))
-                        {
-                            newLeftValue = TypeConverter.ToNumber(originalLeftValue) % TypeConverter.ToNumber(rval);
-                        }
                         else
                         {
                             newLeftValue = TypeConverter.ToNumber(originalLeftValue) % TypeConverter.ToNumber(rval);
@@ -343,13 +339,13 @@ namespace Jint.Runtime.Interpreter.Expressions
 
             private JintIdentifierExpression? _leftIdentifier;
             private bool _evalOrArguments;
+            private bool _initialized;
 
             public SimpleAssignmentExpression(AssignmentExpression expression) : base(expression)
             {
-                _initialized = false;
             }
 
-            protected override void Initialize(EvaluationContext context)
+            private void Initialize()
             {
                 var assignmentExpression = (AssignmentExpression) _expression;
                 _left = Build((Expression) assignmentExpression.Left);
@@ -361,6 +357,12 @@ namespace Jint.Runtime.Interpreter.Expressions
 
             protected override object EvaluateInternal(EvaluationContext context)
             {
+                if (!_initialized)
+                {
+                    Initialize();
+                    _initialized = true;
+                }
+
                 object? completion = null;
                 if (_leftIdentifier != null)
                 {

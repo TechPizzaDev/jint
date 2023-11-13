@@ -258,7 +258,9 @@ namespace Jint.Runtime.Debugger
                 _ => ThrowOnInvalidPauseType()
             };
 
+#pragma warning disable MA0015
             static StepMode ThrowOnInvalidPauseType() => throw new ArgumentException("Invalid pause type", nameof(type));
+#pragma warning restore MA0015
 
             if (result.HasValue)
             {

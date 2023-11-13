@@ -167,7 +167,7 @@ namespace Jint
                 return;
             }
 
-            foreach (var overloads in methods.GroupBy(x => x.Name))
+            foreach (var overloads in methods.GroupBy(x => x.Name, StringComparer.Ordinal))
             {
                 PropertyDescriptor CreateMethodInstancePropertyDescriptor(ClrFunctionInstance? function)
                 {
@@ -201,7 +201,7 @@ namespace Jint
                 // make sure we register both lower case and upper case
                 if (char.IsUpper(overloads.Key[0]))
                 {
-                    key = char.ToLower(overloads.Key[0]) + overloads.Key.Substring(1);
+                    key = char.ToLower(overloads.Key[0], CultureInfo.InvariantCulture) + overloads.Key.Substring(1);
 
                     if (prototype.HasOwnProperty(key) &&
                         prototype.GetOwnProperty(key).Value is ClrFunctionInstance lowerclrFunctionInstance)
@@ -281,7 +281,7 @@ namespace Jint
         /// memory usage to grow when targeting large set and freeing of memory can be delayed due to ConditionalWeakTable semantics.
         /// Defaults to false.
         /// </summary>
-        public bool TrackObjectWrapperIdentity { get; set; } = false;
+        public bool TrackObjectWrapperIdentity { get; set; }
 
         /// <summary>
         /// If no known type could be guessed, objects are by default wrapped as an

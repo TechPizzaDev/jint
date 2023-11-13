@@ -14,37 +14,50 @@ namespace Jint.Runtime.Interpreter.Expressions
         private JintExpression _objectExpression = null!;
         private JintExpression? _propertyExpression;
         private JsValue? _determinedProperty;
+        private bool _initialized;
+
+        private static readonly JsValue _nullMarker = new JsString("NULL MARKER");
 
         public JintMemberExpression(MemberExpression expression) : base(expression)
         {
-            _initialized = false;
             _memberExpression = (MemberExpression) _expression;
         }
 
-        protected override void Initialize(EvaluationContext context)
+        internal static JsValue InitializeDeterminedProperty(MemberExpression expression, bool cache)
         {
-            _objectExpression = Build(_memberExpression.Object);
-
-            if (!_memberExpression.Computed)
+            JsValue? property = null;
+            if (!expression.Computed)
             {
-                if (_memberExpression.Property is Identifier identifier)
+                if (expression.Property is Identifier identifier)
                 {
-                    _determinedProperty = identifier.Name;
+                    property = cache ? JsString.CachedCreate(identifier.Name) : JsString.Create(identifier.Name);
                 }
             }
-            else if (_memberExpression.Property.Type == Nodes.Literal)
+            else if (expression.Property.Type == Nodes.Literal)
             {
-                _determinedProperty = JintLiteralExpression.ConvertToJsValue((Literal) _memberExpression.Property);
+                property = JintLiteralExpression.ConvertToJsValue((Literal) expression.Property);
             }
 
-            if (_determinedProperty is null)
-            {
-                _propertyExpression = Build(_memberExpression.Property);
-            }
+            return property ?? _nullMarker;
         }
 
         protected override object EvaluateInternal(EvaluationContext context)
         {
+            if (!_initialized)
+            {
+                _objectExpression = Build(_memberExpression.Object);
+
+                _determinedProperty ??= _expression.AssociatedData as JsValue ?? InitializeDeterminedProperty(_memberExpression, cache: false);
+
+                if (ReferenceEquals(_determinedProperty, _nullMarker))
+                {
+                    _propertyExpression = Build(_memberExpression.Property);
+                    _determinedProperty = null;
+                }
+
+                _initialized = true;
+            }
+
             JsValue? actualThis = null;
             string? baseReferenceName = null;
             JsValue? baseValue = null;
@@ -127,7 +140,7 @@ namespace Jint.Runtime.Interpreter.Expressions
         /// <summary>
         /// https://tc39.es/ecma262/#sec-makeprivatereference
         /// </summary>
-        private object MakePrivateReference(Engine engine, JsValue baseValue, JsValue privateIdentifier)
+        private static object MakePrivateReference(Engine engine, JsValue baseValue, JsValue privateIdentifier)
         {
             var privEnv = engine.ExecutionContext.PrivateEnvironment;
             var privateName = privEnv!.ResolvePrivateIdentifier(privateIdentifier.ToString());

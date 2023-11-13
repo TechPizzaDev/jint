@@ -18,6 +18,7 @@ namespace Jint.Runtime.Interpreter.Expressions
         // check if we can do a shortcut when all are object properties
         // and don't require duplicate checking
         private bool _canBuildFast;
+        private bool _initialized;
 
         private sealed class ObjectProperty
         {
@@ -54,7 +55,6 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private JintObjectExpression(ObjectExpression expression) : base(expression)
         {
-            _initialized = false;
         }
 
         public static JintExpression Build(ObjectExpression expression)
@@ -64,7 +64,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                 : new JintObjectExpression(expression);
         }
 
-        protected override void Initialize(EvaluationContext context)
+        private void Initialize()
         {
             _canBuildFast = true;
             var expression = (ObjectExpression) _expression;
@@ -87,7 +87,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                     if (!p.Computed && p.Key is Identifier identifier)
                     {
                         propName = identifier.Name;
-                        _canBuildFast &= propName != "__proto__";
+                        _canBuildFast &= !string.Equals(propName, "__proto__", StringComparison.Ordinal);
                     }
 
                     _properties[i] = new ObjectProperty(propName, p);
@@ -120,6 +120,12 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         protected override object EvaluateInternal(EvaluationContext context)
         {
+            if (!_initialized)
+            {
+                Initialize();
+                _initialized = true;
+            }
+
             return _canBuildFast
                 ? BuildObjectFast(context)
                 : BuildObjectNormal(context);
@@ -200,7 +206,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                     }
 
                     var propValue = completion.Clone();
-                    if (objectProperty._key == "__proto__" && !objectProperty._value.Computed && !objectProperty._value.Shorthand)
+                    if (string.Equals(objectProperty._key, "__proto__", StringComparison.Ordinal) && !objectProperty._value.Computed && !objectProperty._value.Shorthand)
                     {
                         if (propValue.IsObject() || propValue.IsNull())
                         {

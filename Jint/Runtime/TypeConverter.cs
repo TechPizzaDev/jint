@@ -78,7 +78,7 @@ namespace Jint.Runtime
         {
             for (var i = 0; i < intToString.Length; ++i)
             {
-                intToString[i] = i.ToString();
+                intToString[i] = i.ToString(CultureInfo.InvariantCulture);
             }
 
             for (var i = 0; i < charToString.Length; ++i)
@@ -800,7 +800,7 @@ namespace Jint.Runtime
 
             if (value is JsString jsString)
             {
-                if (jsString.ToString() == "-0")
+                if (string.Equals(jsString.ToString(), "-0", StringComparison.Ordinal))
                 {
                     return JsNumber.NegativeZero._value;
                 }
@@ -848,7 +848,7 @@ namespace Jint.Runtime
             var temp = intToString;
             return (ulong) i < (ulong) temp.Length
                 ? temp[i]
-                : i.ToString();
+                : i.ToString(CultureInfo.InvariantCulture);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -857,7 +857,7 @@ namespace Jint.Runtime
             var temp = intToString;
             return (uint) i < (uint) temp.Length
                 ? temp[i]
-                : i.ToString();
+                : i.ToString(CultureInfo.InvariantCulture);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -866,7 +866,7 @@ namespace Jint.Runtime
             var temp = intToString;
             return i < (uint) temp.Length
                 ? temp[i]
-                : i.ToString();
+                : i.ToString(CultureInfo.InvariantCulture);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -884,7 +884,7 @@ namespace Jint.Runtime
             var temp = intToString;
             return i < (ulong) temp.Length
                 ? temp[i]
-                : i.ToString();
+                : i.ToString(CultureInfo.InvariantCulture);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -925,7 +925,7 @@ namespace Jint.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static string ToString(BigInteger bigInteger)
         {
-            return bigInteger.ToString();
+            return bigInteger.ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>
@@ -935,7 +935,7 @@ namespace Jint.Runtime
         public static JsValue ToPropertyKey(JsValue o)
         {
             const InternalTypes PropertyKeys = InternalTypes.String | InternalTypes.Symbol | InternalTypes.PrivateName;
-            return (o._type & PropertyKeys) != 0
+            return (o._type & PropertyKeys) != InternalTypes.None
                 ? o
                 : ToPropertyKeyNonString(o);
         }
@@ -945,7 +945,7 @@ namespace Jint.Runtime
         {
             const InternalTypes PropertyKeys = InternalTypes.String | InternalTypes.Symbol | InternalTypes.PrivateName;
             var primitive = ToPrimitive(o, Types.String);
-            return (primitive._type & PropertyKeys) != 0
+            return (primitive._type & PropertyKeys) != InternalTypes.None
                 ? primitive
                 : ToStringNonString(primitive);
         }

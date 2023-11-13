@@ -135,7 +135,7 @@ namespace Jint.Runtime.Interop
         private IEnumerable<JsValue> EnumerateOwnPropertyKeys(Types types)
         {
             // prefer object order, add possible other properties after
-            var includeStrings = (types & Types.String) != 0;
+            var includeStrings = (types & Types.String) != Types.None;
             if (includeStrings && _typeDescriptor.IsStringKeyedGenericDictionary) // expando object for instance
             {
                 var keys = _typeDescriptor.GetKeys(Target);
@@ -301,7 +301,9 @@ namespace Jint.Runtime.Interop
             return Target is ICollection ? 0 : base.GetSmallestIndex(length);
         }
 
-        public override bool Equals(JsValue? obj) => Equals(obj as ObjectWrapper);
+        public override bool Equals(object? obj) => Equals(obj as ObjectWrapper);
+
+        public override bool Equals(JsValue? other) => Equals(other as ObjectWrapper);
 
         public bool Equals(ObjectWrapper? other)
         {
@@ -318,12 +320,7 @@ namespace Jint.Runtime.Interop
             return Equals(Target, other.Target);
         }
 
-        public override int GetHashCode()
-        {
-            var hashCode = -1468639730;
-            hashCode = hashCode * -1521134295 + Target.GetHashCode();
-            return hashCode;
-        }
+        public override int GetHashCode() => Target.GetHashCode();
 
         private sealed class DictionaryIterator : IteratorInstance
         {

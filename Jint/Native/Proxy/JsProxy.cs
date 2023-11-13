@@ -100,6 +100,8 @@ namespace Jint.Native.Proxy
             return _target.IsArray();
         }
 
+        public override object ToObject() => _target.ToObject();
+
         internal override bool IsConstructor
         {
             get
@@ -126,7 +128,7 @@ namespace Jint.Native.Proxy
             AssertTargetNotRevoked(property);
             var target = _target;
 
-            if (property == KeyFunctionRevoke || !TryCallHandler(TrapGet, new[] { target, TypeConverter.ToPropertyKey(property), receiver }, out var result))
+            if (KeyFunctionRevoke.Equals(property) || !TryCallHandler(TrapGet, new[] { target, TypeConverter.ToPropertyKey(property), receiver }, out var result))
             {
                 return target.Get(property, receiver);
             }
@@ -286,7 +288,7 @@ namespace Jint.Native.Proxy
         /// <summary>
         /// https://tc39.es/ecma262/#sec-completepropertydescriptor
         /// </summary>
-        private void CompletePropertyDescriptor(PropertyDescriptor desc)
+        private static void CompletePropertyDescriptor(PropertyDescriptor desc)
         {
             if (desc.IsGenericDescriptor() || desc.IsDataDescriptor())
             {

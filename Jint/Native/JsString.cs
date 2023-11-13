@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using Jint.Runtime;
@@ -12,26 +13,28 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
     private static readonly JsString[] _charToStringJsValue;
     private static readonly JsString[] _intToStringJsValue;
 
-    public static readonly JsString Empty = new JsString("");
-    internal static readonly JsString NullString = new JsString("null");
-    internal static readonly JsString UndefinedString = new JsString("undefined");
-    internal static readonly JsString ObjectString = new JsString("object");
-    internal static readonly JsString FunctionString = new JsString("function");
-    internal static readonly JsString BooleanString = new JsString("boolean");
-    internal static readonly JsString StringString = new JsString("string");
-    internal static readonly JsString NumberString = new JsString("number");
-    internal static readonly JsString BigIntString = new JsString("bigint");
-    internal static readonly JsString SymbolString = new JsString("symbol");
-    internal static readonly JsString DefaultString = new JsString("default");
-    internal static readonly JsString NumberZeroString = new JsString("0");
-    internal static readonly JsString NumberOneString = new JsString("1");
-    internal static readonly JsString TrueString = new JsString("true");
-    internal static readonly JsString FalseString = new JsString("false");
-    internal static readonly JsString LengthString = new JsString("length");
-    internal static readonly JsValue CommaString = new JsString(",");
+    public static readonly JsString Empty;
+    internal static readonly JsString NullString;
+    internal static readonly JsString UndefinedString;
+    internal static readonly JsString ObjectString;
+    internal static readonly JsString FunctionString;
+    internal static readonly JsString BooleanString;
+    internal static readonly JsString StringString;
+    internal static readonly JsString NumberString;
+    internal static readonly JsString BigIntString;
+    internal static readonly JsString SymbolString;
+    internal static readonly JsString DefaultString;
+    internal static readonly JsString NumberZeroString;
+    internal static readonly JsString NumberOneString;
+    internal static readonly JsString TrueString;
+    internal static readonly JsString FalseString;
+    internal static readonly JsString LengthString;
+    internal static readonly JsValue CommaString;
 
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     internal string _value;
+
+    private static ConcurrentDictionary<string, JsString> _stringCache;
 
     static JsString()
     {
@@ -49,6 +52,26 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
         {
             _intToStringJsValue[i] = new JsString(TypeConverter.ToString(i));
         }
+
+
+        _stringCache = new ConcurrentDictionary<string, JsString>(StringComparer.Ordinal);
+        Empty = new JsString("", InternalTypes.String);
+        NullString = CachedCreate("null");
+        UndefinedString = CachedCreate("undefined");
+        ObjectString = CachedCreate("object");
+        FunctionString = CachedCreate("function");
+        BooleanString = CachedCreate("boolean");
+        StringString = CachedCreate("string");
+        NumberString = CachedCreate("number");
+        BigIntString = CachedCreate("bigint");
+        SymbolString = CachedCreate("symbol");
+        DefaultString = CachedCreate("default");
+        NumberZeroString = CachedCreate("0");
+        NumberOneString = CachedCreate("1");
+        TrueString = CachedCreate("true");
+        FalseString = CachedCreate("false");
+        LengthString = CachedCreate("length");
+        CommaString = CachedCreate(",");
     }
 
     public JsString(string value) : this(value, InternalTypes.String)
@@ -143,6 +166,16 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
         return new JsString(value);
     }
 
+    internal static JsString CachedCreate(string value)
+    {
+        if (value.Length < 2)
+        {
+            return Create(value);
+        }
+
+        return _stringCache.GetOrAdd(value, static x => new JsString(x));
+    }
+
     internal static JsString Create(char value)
     {
         var temp = _charToJsValue;
@@ -231,13 +264,13 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
 
     internal bool StartsWith(string value, int start = 0)
     {
-        return value.Length + start <= Length && ToString().AsSpan(start).StartsWith(value.AsSpan());
+        return value.Length + start <= Length && ToString().AsSpan(start).StartsWith(value.AsSpan(), StringComparison.Ordinal);
     }
 
     internal bool EndsWith(string value, int end = 0)
     {
         var start = end - value.Length;
-        return start >= 0 && ToString().AsSpan(start, value.Length).EndsWith(value.AsSpan());
+        return start >= 0 && ToString().AsSpan(start, value.Length).EndsWith(value.AsSpan(), StringComparison.Ordinal);
     }
 
     internal string Substring(int startIndex, int length)
@@ -250,15 +283,11 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
         return ToString().Substring(startIndex);
     }
 
-    public sealed override bool Equals(JsValue? obj)
-    {
-        return Equals(obj as JsString);
-    }
+    public sealed override bool Equals(object? obj) => Equals(obj as JsString);
 
-    public virtual bool Equals(string? s)
-    {
-        return s != null && ToString() == s;
-    }
+    public sealed override bool Equals(JsValue? other) => Equals(other as JsString);
+
+    public virtual bool Equals(string? other) => other != null && string.Equals(ToString(), other, StringComparison.Ordinal);
 
     public virtual bool Equals(JsString? other)
     {
@@ -272,7 +301,7 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
             return true;
         }
 
-        return _value == other.ToString();
+        return string.Equals(_value, other.ToString(), StringComparison.Ordinal);
     }
 
     public override bool IsLooselyEqual(JsValue value)
@@ -290,15 +319,7 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
         return base.IsLooselyEqual(value);
     }
 
-    public sealed override bool Equals(object? obj)
-    {
-        return Equals(obj as JsString);
-    }
-
-    public override int GetHashCode()
-    {
-        return _value.GetHashCode();
-    }
+    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(_value);
 
     internal sealed class ConcatenatedString : JsString
     {
@@ -374,7 +395,7 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
                 return true;
             }
 
-            return _value == s;
+            return string.Equals(_value, s, StringComparison.Ordinal);
         }
 
         public override bool Equals(JsString? other)
@@ -398,7 +419,7 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
                     return true;
                 }
 
-                return ToString() == cs.ToString();
+                return string.Equals(ToString(), cs.ToString(), StringComparison.Ordinal);
             }
 
             if (other is null || other.Length != Length)
@@ -406,13 +427,10 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
                 return false;
             }
 
-            return ToString() == other.ToString();
+            return string.Equals(ToString(), other.ToString(), StringComparison.Ordinal);
         }
 
-        public override int GetHashCode()
-        {
-            return _stringBuilder?.GetHashCode() ?? _value.GetHashCode();
-        }
+        public override int GetHashCode() => _stringBuilder?.GetHashCode() ?? StringComparer.Ordinal.GetHashCode(_value);
 
         internal override JsValue DoClone()
         {
