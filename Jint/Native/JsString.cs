@@ -168,7 +168,7 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
 
     internal static JsString CachedCreate(string value)
     {
-        if (value.Length < 2)
+        if (value.Length is < 2 or > 10)
         {
             return Create(value);
         }
@@ -244,6 +244,15 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
 
     public override string ToString() => _value;
 
+    internal bool Contains(char c)
+    {
+        if (c == 0)
+        {
+            return false;
+        }
+        return ToString().Contains(c);
+    }
+
     internal int IndexOf(string value, int startIndex = 0)
     {
         if (Length - startIndex < value.Length)
@@ -251,15 +260,6 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
             return -1;
         }
         return ToString().IndexOf(value, startIndex, StringComparison.Ordinal);
-    }
-
-    internal int IndexOf(char value)
-    {
-        if (Length == 0)
-        {
-            return -1;
-        }
-        return ToString().IndexOf(value);
     }
 
     internal bool StartsWith(string value, int start = 0)

@@ -1,10 +1,12 @@
-﻿using System.Text.RegularExpressions;
+﻿#pragma warning disable CA1859 // Use concrete types when possible for improved performance -- most of prototype methods return JsValue
+
+using System.Text;
+using System.Text.RegularExpressions;
 using Jint.Collections;
 using Jint.Native.Number;
 using Jint.Native.Object;
 using Jint.Native.String;
 using Jint.Native.Symbol;
-using Jint.Pooling;
 using Jint.Runtime;
 using Jint.Runtime.Descriptors;
 using Jint.Runtime.Interop;
@@ -139,17 +141,17 @@ namespace Jint.Native.RegExp
             {
                 var value = TypeConverter.ToString(replaceValue);
                 replaceValue = value;
-                mayHaveNamedCaptures = value.IndexOf('$') != -1;
+                mayHaveNamedCaptures = value.Contains('$');
             }
 
             var flags = TypeConverter.ToString(rx.Get(PropertyFlags));
-            var global = flags.IndexOf('g') != -1;
+            var global = flags.Contains('g');
 
             var fullUnicode = false;
 
             if (global)
             {
-                fullUnicode = flags.IndexOf('u') != -1;
+                fullUnicode = flags.Contains('u');
                 rx.Set(JsRegExp.PropertyLastIndex, 0, true);
             }
 
@@ -324,7 +326,7 @@ namespace Jint.Native.RegExp
             string replacement)
         {
             // If there is no pattern, replace the pattern as is.
-            if (replacement.IndexOf('$') < 0)
+            if (!replacement.Contains('$'))
             {
                 return replacement;
             }
@@ -335,8 +337,7 @@ namespace Jint.Native.RegExp
             // $`	Inserts the portion of the string that precedes the matched substring.
             // $'	Inserts the portion of the string that follows the matched substring.
             // $n or $nn	Where n or nn are decimal digits, inserts the nth parenthesized submatch string, provided the first argument was a RegExp object.
-            using var replacementBuilder = StringBuilderPool.Rent();
-            var sb = replacementBuilder.Builder;
+            var sb = new ValueStringBuilder();
             for (var i = 0; i < replacement.Length; i++)
             {
                 char c = replacement[i];
@@ -351,14 +352,12 @@ namespace Jint.Native.RegExp
                         case '&':
                             sb.Append(matched);
                             break;
-#pragma warning disable CA1846
                         case '`':
-                            sb.Append(str.Substring(0, position));
+                            sb.Append(str.AsSpan(0, position));
                             break;
                         case '\'':
-                            sb.Append(str.Substring(position + matched.Length));
+                            sb.Append(str.AsSpan(position + matched.Length));
                             break;
-#pragma warning restore CA1846
                         case '<':
                             var gtPos = replacement.IndexOf('>', i + 1);
                             if (gtPos == -1 || namedCaptures.IsUndefined())
@@ -428,7 +427,7 @@ namespace Jint.Native.RegExp
                 }
             }
 
-            return replacementBuilder.ToString();
+            return sb.ToString();
         }
 
         /// <summary>
@@ -441,8 +440,8 @@ namespace Jint.Native.RegExp
             var limit = arguments.At(1);
             var c = SpeciesConstructor(rx, _realm.Intrinsics.RegExp);
             var flags = TypeConverter.ToJsString(rx.Get(PropertyFlags));
-            var unicodeMatching = flags.IndexOf('u') > -1;
-            var newFlags = flags.IndexOf('y') > -1 ? flags : new JsString(flags.ToString() + 'y');
+            var unicodeMatching = flags.Contains('u');
+            var newFlags = flags.Contains('y') ? flags : new JsString(flags.ToString() + 'y');
             var splitter = Construct(c, new JsValue[]
             {
                 rx,
@@ -527,7 +526,7 @@ namespace Jint.Native.RegExp
             return SplitSlow(s, splitter, unicodeMatching, lengthA, lim);
         }
 
-        private JsValue SplitSlow(string s, ObjectInstance splitter, bool unicodeMatching, uint lengthA, long lim)
+        private JsArray SplitSlow(string s, ObjectInstance splitter, bool unicodeMatching, uint lengthA, long lim)
         {
             var a = _realm.Intrinsics.Array.ArrayCreate(0);
             ulong previousStringIndex = 0;
@@ -684,13 +683,13 @@ namespace Jint.Native.RegExp
 
             var s = TypeConverter.ToString(arguments.At(0));
             var flags = TypeConverter.ToString(rx.Get(PropertyFlags));
-            var global = flags.IndexOf('g') != -1;
+            var global = flags.Contains('g');
             if (!global)
             {
                 return RegExpExec(rx, s);
             }
 
-            var fullUnicode = flags.IndexOf('u') != -1;
+            var fullUnicode = flags.Contains('u');
             rx.Set(JsRegExp.PropertyLastIndex, JsNumber.PositiveZero, true);
 
             if (!fullUnicode
@@ -787,8 +786,8 @@ namespace Jint.Native.RegExp
             var lastIndex = TypeConverter.ToLength(r.Get(JsRegExp.PropertyLastIndex));
             matcher.Set(JsRegExp.PropertyLastIndex, lastIndex, true);
 
-            var global = flags.IndexOf('g') != -1;
-            var fullUnicode = flags.IndexOf('u') != -1;
+            var global = flags.Contains('g');
+            var fullUnicode = flags.Contains('u');
 
             return _realm.Intrinsics.RegExpStringIteratorPrototype.Construct(matcher, s, global, fullUnicode);
         }

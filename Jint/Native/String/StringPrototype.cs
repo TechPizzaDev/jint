@@ -1,3 +1,5 @@
+#pragma warning disable CA1859 // Use concrete types when possible for improved performance -- most of prototype methods return JsValue
+
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -7,7 +9,6 @@ using Jint.Native.Json;
 using Jint.Native.Object;
 using Jint.Native.RegExp;
 using Jint.Native.Symbol;
-using Jint.Pooling;
 using Jint.Runtime;
 using Jint.Runtime.Descriptors;
 using Jint.Runtime.Interop;
@@ -593,7 +594,7 @@ namespace Jint.Native.String
                 {
                     var flags = searchValue.Get(RegExpPrototype.PropertyFlags);
                     TypeConverter.CheckObjectCoercible(_engine, flags);
-                    if (TypeConverter.ToString(flags).IndexOf('g') < 0)
+                    if (!TypeConverter.ToString(flags).Contains('g'))
                     {
                         ExceptionHelper.ThrowTypeError(_realm, "String.prototype.replaceAll called with a non-global RegExp argument");
                     }
@@ -617,7 +618,7 @@ namespace Jint.Native.String
 
                 // check fast case
                 var newValue = replaceValue.ToString();
-                if (newValue.IndexOf('$') < 0 && searchString.Length > 0)
+                if (!newValue.Contains('$') && searchString.Length > 0)
                 {
                     // just plain old string replace
                     return thisString.Replace(searchString, newValue);
@@ -641,8 +642,7 @@ namespace Jint.Native.String
             var advanceBy = System.Math.Max(1, searchLength);
 
             var endOfLastMatch = 0;
-            using var pool = StringBuilderPool.Rent();
-            var result = pool.Builder;
+            var result = new ValueStringBuilder();
 
             var position = StringIndexOf(thisString, searchString, 0);
             while (position != -1)
@@ -660,7 +660,9 @@ namespace Jint.Native.String
                     replacement =  RegExpPrototype.GetSubstitution(searchString, thisString, position, captures, Undefined, TypeConverter.ToString(replaceValue));
                 }
 
-                result.Append(preserved).Append(replacement);
+                result.Append(preserved);
+                result.Append(replacement);
+
                 endOfLastMatch = position + searchLength;
 
                 position = StringIndexOf(thisString, searchString, position + advanceBy);
@@ -669,7 +671,7 @@ namespace Jint.Native.String
             if (endOfLastMatch < thisString.Length)
             {
 #if NETFRAMEWORK
-                result.Append(thisString.Substring(endOfLastMatch));
+                result.Append(thisString.AsSpan(endOfLastMatch));
 #else
                 result.Append(thisString[endOfLastMatch..]);
 #endif
@@ -709,7 +711,7 @@ namespace Jint.Native.String
                 {
                     var flags = regex.Get(RegExpPrototype.PropertyFlags);
                     TypeConverter.CheckObjectCoercible(_engine, flags);
-                    if (TypeConverter.ToString(flags).IndexOf('g') < 0)
+                    if (!TypeConverter.ToString(flags).Contains('g'))
                     {
                         ExceptionHelper.ThrowTypeError(_realm);
                     }
@@ -1142,11 +1144,10 @@ namespace Jint.Native.String
                 return new string(s[0], (int) n);
             }
 
-            using var sb = StringBuilderPool.Rent();
-            sb.Builder.EnsureCapacity((int) (n * s.Length));
+            var sb = new ValueStringBuilder((int) (n * s.Length));
             for (var i = 0; i < n; ++i)
             {
-                sb.Builder.Append(s);
+                sb.Append(s);
             }
 
             return sb.ToString();
@@ -1168,8 +1169,7 @@ namespace Jint.Native.String
             var strLen = s.Length;
             var k = 0;
 
-            using var builder = StringBuilderPool.Rent();
-            var result = builder.Builder;
+            var result = new ValueStringBuilder();
             while (k < strLen)
             {
                 var cp = CodePointAt(s, k);
@@ -1180,7 +1180,7 @@ namespace Jint.Native.String
                 }
                 else
                 {
-                    result.Append(s, k, cp.CodeUnitCount);
+                    result.Append(s.AsSpan(k, cp.CodeUnitCount));
                 }
                 k += cp.CodeUnitCount;
             }
