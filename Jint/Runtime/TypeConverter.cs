@@ -2,13 +2,11 @@ using System.Globalization;
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Text;
 using Esprima;
 using Esprima.Ast;
 using Jint.Extensions;
 using Jint.Native;
 using Jint.Native.Number;
-using Jint.Native.Number.Dtoa;
 using Jint.Native.Object;
 using Jint.Native.String;
 using Jint.Native.Symbol;
@@ -896,20 +894,7 @@ namespace Jint.Runtime
                 return ToString((long) d);
             }
 
-            var stringBuilder = new ValueStringBuilder(stackalloc char[128]);
-            // we can create smaller array as we know the format to be short
-            NumberPrototype.NumberToString(d, CreateDtoaBuilderForDouble(), ref stringBuilder);
-            return stringBuilder.ToString();
-        }
-
-        /// <summary>
-        /// Creates a new <see cref="DtoaBuilder"/> with the default buffer
-        /// size for <see cref="ToString(double)"/>
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static DtoaBuilder CreateDtoaBuilderForDouble()
-        {
-            return new DtoaBuilder(17);
+            return NumberPrototype.ToNumberString(d);
         }
 
         /// <summary>
