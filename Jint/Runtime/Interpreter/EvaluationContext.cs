@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Esprima.Ast;
 
 namespace Jint.Runtime.Interpreter;
 
@@ -10,10 +9,9 @@ internal sealed class EvaluationContext
 {
     private readonly bool _shouldRunBeforeExecuteStatementChecks;
 
-    public EvaluationContext(Engine engine, in Completion? resumedCompletion = null)
+    public EvaluationContext(Engine engine)
     {
         Engine = engine;
-        ResumedCompletion = resumedCompletion ?? default; // TODO later
         OperatorOverloadingAllowed = engine.Options.Interop.AllowOperatorOverloading;
         _shouldRunBeforeExecuteStatementChecks = engine._constraints.Length > 0 || engine._isDebugMode;
     }
@@ -22,16 +20,14 @@ internal sealed class EvaluationContext
     public EvaluationContext()
     {
         Engine = null!;
-        ResumedCompletion = default; // TODO later
         OperatorOverloadingAllowed = false;
         _shouldRunBeforeExecuteStatementChecks = false;
     }
 
     public readonly Engine Engine;
-    public readonly Completion ResumedCompletion;
     public bool DebugMode => Engine._isDebugMode;
 
-    public SyntaxElement LastSyntaxElement
+    public Node LastSyntaxElement
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get => Engine.GetLastSyntaxElement();
@@ -45,7 +41,7 @@ internal sealed class EvaluationContext
     public string? Target;
     public CompletionType Completion;
 
-    public void RunBeforeExecuteStatementChecks(Statement statement)
+    public void RunBeforeExecuteStatementChecks(StatementOrExpression statement)
     {
         if (_shouldRunBeforeExecuteStatementChecks)
         {

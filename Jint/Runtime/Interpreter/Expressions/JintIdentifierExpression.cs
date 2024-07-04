@@ -1,58 +1,38 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
-using Esprima.Ast;
 using Jint.Native;
-using Jint.Native.Argument;
 using Jint.Runtime.Environments;
+using Environment = Jint.Runtime.Environments.Environment;
 
 namespace Jint.Runtime.Interpreter.Expressions;
 
 internal sealed class JintIdentifierExpression : JintExpression
 {
-    private EnvironmentRecord.BindingName _identifier = null!;
-    private bool _initialized;
+    private readonly Environment.BindingName _identifier;
 
-    public JintIdentifierExpression(Identifier expression) : base(expression)
+    public JintIdentifierExpression(Identifier expression) : this(expression, new Environment.BindingName((Key) expression.Name))
     {
+        _identifier = new Environment.BindingName((Key) ((Identifier) _expression).Name);
     }
 
-    public EnvironmentRecord.BindingName Identifier
+    public JintIdentifierExpression(Identifier identifier, Environment.BindingName bindingName) : base(identifier)
     {
-        get
-        {
-            EnsureIdentifier();
-            return _identifier;
-        }
+        _identifier = bindingName;
     }
 
-    private void Initialize()
-    {
-        EnsureIdentifier();
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void EnsureIdentifier()
-    {
-        _identifier ??= _expression.AssociatedData as EnvironmentRecord.BindingName ?? new EnvironmentRecord.BindingName((Key) ((Identifier) _expression).Name);
-    }
+    public Environment.BindingName Identifier => _identifier;
 
     public bool HasEvalOrArguments
     {
         get
         {
-            var name = ((Identifier) _expression).Name;
-            return name is "eval" or "arguments";
+            var key = _identifier.Key;
+            return key == KnownKeys.Eval || key == KnownKeys.Arguments;
         }
     }
 
     protected override object EvaluateInternal(EvaluationContext context)
     {
-        if (!_initialized)
-        {
-            Initialize();
-            _initialized = true;
-        }
-
         var engine = context.Engine;
         var env = engine.ExecutionContext.LexicalEnvironment;
         var strict = StrictModeScope.IsStrictModeCode;
@@ -74,14 +54,12 @@ internal sealed class JintIdentifierExpression : JintExpression
             return identifier.CalculatedValue;
         }
 
-        var strict = StrictModeScope.IsStrictModeCode;
         var engine = context.Engine;
         var env = engine.ExecutionContext.LexicalEnvironment;
 
         if (JintEnvironment.TryGetIdentifierEnvironmentWithBindingValue(
                 env,
                 identifier,
-                strict,
                 out _,
                 out var value))
         {
@@ -92,12 +70,12 @@ internal sealed class JintIdentifierExpression : JintExpression
         }
         else
         {
-            var reference = engine._referencePool.Rent(JsValue.Undefined, identifier.Value, strict, thisValue: null);
-            value = engine.GetValue(reference, true);
+            var reference = engine._referencePool.Rent(JsValue.Undefined, identifier.Value, StrictModeScope.IsStrictModeCode, thisValue: null);
+            value = engine.GetValue(reference, returnReferenceToPool: true);
         }
 
         // make sure arguments access freezes state
-        if (value is ArgumentsInstance argumentsInstance)
+        if (value is JsArguments argumentsInstance)
         {
             argumentsInstance.Materialize();
         }

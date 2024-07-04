@@ -1,4 +1,3 @@
-using Esprima.Ast;
 using Jint.Runtime.Modules;
 
 namespace Jint
@@ -57,7 +56,7 @@ namespace Jint
         }
 
         public static HoistingScope GetModuleLevelDeclarations(
-            Module module,
+            AstModule module,
             bool collectVarNames = false,
             bool collectLexicalNames = false)
         {
@@ -79,7 +78,7 @@ namespace Jint
             for (var i = 0; i < statementListItems.Count; i++)
             {
                 var node = statementListItems[i];
-                if (node.Type != Nodes.VariableDeclaration && node.Type != Nodes.FunctionDeclaration && node.Type != Nodes.ClassDeclaration)
+                if (node.Type != NodeType.VariableDeclaration && node.Type != NodeType.FunctionDeclaration && node.Type != NodeType.ClassDeclaration)
                 {
                     continue;
                 }
@@ -103,7 +102,7 @@ namespace Jint
             for (var i = 0; i < statementListItems.Count; i++)
             {
                 var node = statementListItems[i];
-                if (node.Type != Nodes.VariableDeclaration)
+                if (node.Type != NodeType.VariableDeclaration)
                 {
                     continue;
                 }
@@ -122,8 +121,8 @@ namespace Jint
         }
 
         public static void GetImportsAndExports(
-            Module module,
-            out HashSet<string> requestedModules,
+            AstModule module,
+            out HashSet<ModuleRequest> requestedModules,
             out List<ImportEntry>? importEntries,
             out List<ExportEntry> localExportEntries,
             out List<ExportEntry> indirectExportEntries,
@@ -133,8 +132,8 @@ namespace Jint
             treeWalker.Visit(module);
 
             importEntries = treeWalker._importEntries;
-            requestedModules = treeWalker._requestedModules ?? new(StringComparer.Ordinal);
-            var importedBoundNames = new HashSet<string>(StringComparer.Ordinal);
+            requestedModules = treeWalker._requestedModules ?? [];
+            var importedBoundNames = new HashSet<string?>(StringComparer.Ordinal);
 
             if (importEntries != null)
             {
@@ -222,7 +221,7 @@ namespace Jint
                 foreach (var childNode in node.ChildNodes)
                 {
                     var childType = childNode.Type;
-                    if (childType == Nodes.VariableDeclaration)
+                    if (childType == NodeType.VariableDeclaration)
                     {
                         var variableDeclaration = (VariableDeclaration)childNode;
                         if (variableDeclaration.Kind == VariableDeclarationKind.Var)
@@ -243,7 +242,7 @@ namespace Jint
                             }
                         }
 
-                        if (parent is null or Module && variableDeclaration.Kind != VariableDeclarationKind.Var)
+                        if (parent is null or AstModule && variableDeclaration.Kind != VariableDeclarationKind.Var)
                         {
                             _lexicalDeclarations ??= new List<Declaration>();
                             _lexicalDeclarations.Add(variableDeclaration);
@@ -261,24 +260,24 @@ namespace Jint
                             }
                         }
                     }
-                    else if (childType == Nodes.FunctionDeclaration)
+                    else if (childType == NodeType.FunctionDeclaration)
                     {
                         // function declarations are not hoisted if they are under block or case clauses
-                        if (parent is null || (node.Type != Nodes.BlockStatement && node.Type != Nodes.SwitchCase))
+                        if (parent is null || (node.Type != NodeType.BlockStatement && node.Type != NodeType.SwitchCase))
                         {
                             _functions ??= new List<FunctionDeclaration>();
                             _functions.Add((FunctionDeclaration)childNode);
                         }
                     }
-                    else if (childType == Nodes.ClassDeclaration && parent is null or Module)
+                    else if (childType == NodeType.ClassDeclaration && parent is null or AstModule)
                     {
                         _lexicalDeclarations ??= new List<Declaration>();
                         _lexicalDeclarations.Add((Declaration) childNode);
                     }
 
-                    if (childType != Nodes.FunctionDeclaration
-                        && childType != Nodes.ArrowFunctionExpression
-                        && childType != Nodes.FunctionExpression
+                    if (childType != NodeType.FunctionDeclaration
+                        && childType != NodeType.ArrowFunctionExpression
+                        && childType != NodeType.FunctionExpression
                         && !childNode.ChildNodes.IsEmpty())
                     {
                         Visit(childNode, node);
@@ -287,27 +286,35 @@ namespace Jint
             }
         }
 
+        private sealed class ModuleRequestRecordComparer : IComparer<ModuleRequest>
+        {
+            public int Compare(ModuleRequest x, ModuleRequest y)
+            {
+                return string.Compare(x.Specifier, y.Specifier, StringComparison.Ordinal);
+            }
+        }
+
         private sealed class ModuleWalker
         {
             internal List<ImportEntry>? _importEntries;
             internal List<ExportEntry>? _exportEntries;
-            internal HashSet<string>? _requestedModules;
+            internal HashSet<ModuleRequest>? _requestedModules;
 
             internal void Visit(Node node)
             {
                 foreach (var childNode in node.ChildNodes)
                 {
-                    if (childNode.Type == Nodes.ImportDeclaration)
+                    if (childNode.Type == NodeType.ImportDeclaration)
                     {
-                        _importEntries ??= new();
-                        _requestedModules ??= new(StringComparer.Ordinal);
+                        _importEntries ??= [];
+                        _requestedModules ??= [];
                         var import = (ImportDeclaration) childNode;
                         import.GetImportEntries(_importEntries, _requestedModules);
                     }
-                    else if (childNode.Type is Nodes.ExportAllDeclaration or Nodes.ExportDefaultDeclaration or Nodes.ExportNamedDeclaration)
+                    else if (childNode.Type is NodeType.ExportAllDeclaration or NodeType.ExportDefaultDeclaration or NodeType.ExportNamedDeclaration)
                     {
-                        _exportEntries ??= new();
-                        _requestedModules ??= new(StringComparer.Ordinal);
+                        _exportEntries ??= [];
+                        _requestedModules ??= [];
                         var export = (ExportDeclaration) childNode;
                         export.GetExportEntries(_exportEntries, _requestedModules);
                     }

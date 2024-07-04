@@ -33,14 +33,14 @@ namespace Jint.Native.TypedArray
         {
             var properties = new PropertyDictionary(2, false)
             {
-                ["from"] = new(new PropertyDescriptor(new ClrFunctionInstance(Engine, "from", From, 1, PropertyFlag.Configurable), PropertyFlag.NonEnumerable)),
-                ["of"] = new(new PropertyDescriptor(new ClrFunctionInstance(Engine, "of", Of, 0, PropertyFlag.Configurable), PropertyFlag.NonEnumerable))
+                ["from"] = new(new PropertyDescriptor(new ClrFunction(Engine, "from", From, 1, PropertyFlag.Configurable), PropertyFlag.NonEnumerable)),
+                ["of"] = new(new PropertyDescriptor(new ClrFunction(Engine, "of", Of, 0, PropertyFlag.Configurable), PropertyFlag.NonEnumerable))
             };
             SetProperties(properties);
 
             var symbols = new SymbolDictionary(1)
             {
-                [GlobalSymbolRegistry.Species] = new GetSetPropertyDescriptor(new ClrFunctionInstance(Engine, "get [Symbol.species]", Species, 0, PropertyFlag.Configurable), Undefined, PropertyFlag.Configurable)
+                [GlobalSymbolRegistry.Species] = new GetSetPropertyDescriptor(new ClrFunction(Engine, "get [Symbol.species]", Species, 0, PropertyFlag.Configurable), Undefined, PropertyFlag.Configurable)
             };
             SetSymbols(symbols);
         }
@@ -93,7 +93,7 @@ namespace Jint.Native.TypedArray
             }
 
             var arrayLike = TypeConverter.ToObject(_realm, source);
-            var len = arrayLike.Length;
+            var len = arrayLike.GetLength();
 
             var argumentList = new JsValue[] { JsNumber.Create(len) };
             var targetObj = TypedArrayCreate(_realm, (IConstructor) c, argumentList);
@@ -167,16 +167,22 @@ namespace Jint.Native.TypedArray
         /// </summary>
         internal static JsTypedArray TypedArrayCreate(Realm realm, IConstructor constructor, JsValue[] argumentList)
         {
-            var newTypedArray = Construct(constructor, argumentList).ValidateTypedArray(realm);
+            var newTypedArray = Construct(constructor, argumentList);
+            var taRecord = newTypedArray.ValidateTypedArray(realm);
+
             if (argumentList.Length == 1 && argumentList[0] is JsNumber number)
             {
-                if (newTypedArray.Length < number._value)
+                if (taRecord.IsTypedArrayOutOfBounds)
+                {
+                    ExceptionHelper.ThrowTypeError(realm, "TypedArray is out of bounds");
+                }
+                if (newTypedArray.GetLength() < number._value)
                 {
                     ExceptionHelper.ThrowTypeError(realm);
                 }
             }
 
-            return newTypedArray;
+            return taRecord.Object;
         }
 
         private static JsValue Species(JsValue thisObject, JsValue[] arguments)

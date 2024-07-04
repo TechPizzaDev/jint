@@ -11,6 +11,7 @@ using Jint.Native.RegExp;
 using Jint.Native.Symbol;
 using Jint.Runtime;
 using Jint.Runtime.Descriptors;
+using Jint.Runtime.Descriptors.Specialized;
 using Jint.Runtime.Interop;
 
 namespace Jint.Native.String
@@ -22,6 +23,7 @@ namespace Jint.Native.String
     {
         private readonly Realm _realm;
         private readonly StringConstructor _constructor;
+        internal ClrFunction? _originalIteratorFunction;
 
         internal StringPrototype(
             Engine engine,
@@ -41,57 +43,60 @@ namespace Jint.Native.String
             const PropertyFlag lengthFlags = PropertyFlag.Configurable;
             const PropertyFlag propertyFlags = lengthFlags | PropertyFlag.Writable;
 
-            var trimStart = new PropertyDescriptor(new ClrFunctionInstance(Engine, "trimStart", TrimStart, 0, lengthFlags), propertyFlags);
-            var trimEnd = new PropertyDescriptor(new ClrFunctionInstance(Engine, "trimEnd", TrimEnd, 0, lengthFlags), propertyFlags);
+            var trimStart = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "trimStart", prototype.TrimStart, 0, lengthFlags), propertyFlags);
+            var trimEnd = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "trimEnd", prototype.TrimEnd, 0, lengthFlags), propertyFlags);
             var properties = new PropertyDictionary(37, checkExistingKeys: false)
             {
                 ["constructor"] = new PropertyDescriptor(_constructor, PropertyFlag.NonEnumerable),
-                ["toString"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "toString", ToStringString, 0, lengthFlags), propertyFlags),
-                ["valueOf"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "valueOf", ValueOf, 0, lengthFlags), propertyFlags),
-                ["charAt"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "charAt", CharAt, 1, lengthFlags), propertyFlags),
-                ["charCodeAt"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "charCodeAt", CharCodeAt, 1, lengthFlags), propertyFlags),
-                ["codePointAt"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "codePointAt", CodePointAt, 1, lengthFlags), propertyFlags),
-                ["concat"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "concat", Concat, 1, lengthFlags), propertyFlags),
-                ["indexOf"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "indexOf", IndexOf, 1, lengthFlags), propertyFlags),
-                ["endsWith"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "endsWith", EndsWith, 1, lengthFlags), propertyFlags),
-                ["startsWith"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "startsWith", StartsWith, 1, lengthFlags), propertyFlags),
-                ["lastIndexOf"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "lastIndexOf", LastIndexOf, 1, lengthFlags), propertyFlags),
-                ["localeCompare"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "localeCompare", LocaleCompare, 1, lengthFlags), propertyFlags),
-                ["match"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "match", Match, 1, lengthFlags), propertyFlags),
-                ["matchAll"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "matchAll", MatchAll, 1, lengthFlags), propertyFlags),
-                ["replace"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "replace", Replace, 2, lengthFlags), propertyFlags),
-                ["replaceAll"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "replaceAll", ReplaceAll, 2, lengthFlags), propertyFlags),
-                ["search"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "search", Search, 1, lengthFlags), propertyFlags),
-                ["slice"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "slice", Slice, 2, lengthFlags), propertyFlags),
-                ["split"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "split", Split, 2, lengthFlags), propertyFlags),
-                ["substr"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "substr", Substr, 2), propertyFlags),
-                ["substring"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "substring", Substring, 2, lengthFlags), propertyFlags),
-                ["toLowerCase"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "toLowerCase", ToLowerCase, 0, lengthFlags), propertyFlags),
-                ["toLocaleLowerCase"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "toLocaleLowerCase", ToLocaleLowerCase, 0, lengthFlags), propertyFlags),
-                ["toUpperCase"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "toUpperCase", ToUpperCase, 0, lengthFlags), propertyFlags),
-                ["toLocaleUpperCase"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "toLocaleUpperCase", ToLocaleUpperCase, 0, lengthFlags), propertyFlags),
-                ["trim"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "trim", Trim, 0, lengthFlags), propertyFlags),
+                ["toString"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "toString", prototype.ToStringString, 0, lengthFlags), propertyFlags),
+                ["valueOf"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "valueOf", prototype.ValueOf, 0, lengthFlags), propertyFlags),
+                ["charAt"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "charAt", prototype.CharAt, 1, lengthFlags), propertyFlags),
+                ["charCodeAt"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "charCodeAt", prototype.CharCodeAt, 1, lengthFlags), propertyFlags),
+                ["codePointAt"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "codePointAt", prototype.CodePointAt, 1, lengthFlags), propertyFlags),
+                ["concat"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "concat", prototype.Concat, 1, lengthFlags), propertyFlags),
+                ["indexOf"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "indexOf", prototype.IndexOf, 1, lengthFlags), propertyFlags),
+                ["endsWith"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "endsWith", prototype.EndsWith, 1, lengthFlags), propertyFlags),
+                ["startsWith"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "startsWith", prototype.StartsWith, 1, lengthFlags), propertyFlags),
+                ["lastIndexOf"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "lastIndexOf", prototype.LastIndexOf, 1, lengthFlags), propertyFlags),
+                ["localeCompare"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "localeCompare", prototype.LocaleCompare, 1, lengthFlags), propertyFlags),
+                ["match"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "match", prototype.Match, 1, lengthFlags), propertyFlags),
+                ["matchAll"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "matchAll", prototype.MatchAll, 1, lengthFlags), propertyFlags),
+                ["replace"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "replace", prototype.Replace, 2, lengthFlags), propertyFlags),
+                ["replaceAll"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "replaceAll", prototype.ReplaceAll, 2, lengthFlags), propertyFlags),
+                ["search"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "search", prototype.Search, 1, lengthFlags), propertyFlags),
+                ["slice"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "slice", prototype.Slice, 2, lengthFlags), propertyFlags),
+                ["split"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "split", prototype.Split, 2, lengthFlags), propertyFlags),
+                ["substr"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "substr", Substr, 2), propertyFlags),
+                ["substring"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "substring", prototype.Substring, 2, lengthFlags), propertyFlags),
+                ["toLowerCase"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "toLowerCase", prototype.ToLowerCase, 0, lengthFlags), propertyFlags),
+                ["toLocaleLowerCase"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "toLocaleLowerCase", prototype.ToLocaleLowerCase, 0, lengthFlags), propertyFlags),
+                ["toUpperCase"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "toUpperCase", prototype.ToUpperCase, 0, lengthFlags), propertyFlags),
+                ["toLocaleUpperCase"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "toLocaleUpperCase", prototype.ToLocaleUpperCase, 0, lengthFlags), propertyFlags),
+                ["trim"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "trim", prototype.Trim, 0, lengthFlags), propertyFlags),
                 ["trimStart"] = trimStart,
                 ["trimEnd"] = trimEnd,
                 ["trimLeft"] = trimStart,
                 ["trimRight"] = trimEnd,
-                ["padStart"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "padStart", PadStart, 1, lengthFlags), propertyFlags),
-                ["padEnd"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "padEnd", PadEnd, 1, lengthFlags), propertyFlags),
-                ["includes"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "includes", Includes, 1, lengthFlags), propertyFlags),
-                ["normalize"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "normalize", Normalize, 0, lengthFlags), propertyFlags),
-                ["repeat"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "repeat", Repeat, 1, lengthFlags), propertyFlags),
-                ["at"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "at", At, 1, lengthFlags), propertyFlags),
-                ["isWellFormed"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "isWellFormed", IsWellFormed, 0, lengthFlags), propertyFlags),
-                ["toWellFormed"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "toWellFormed", ToWellFormed, 0, lengthFlags), propertyFlags),
+                ["padStart"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "padStart", prototype.PadStart, 1, lengthFlags), propertyFlags),
+                ["padEnd"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "padEnd", prototype.PadEnd, 1, lengthFlags), propertyFlags),
+                ["includes"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "includes", prototype.Includes, 1, lengthFlags), propertyFlags),
+                ["normalize"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "normalize", prototype.Normalize, 0, lengthFlags), propertyFlags),
+                ["repeat"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "repeat", prototype.Repeat, 1, lengthFlags), propertyFlags),
+                ["at"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "at", prototype.At, 1, lengthFlags), propertyFlags),
+                ["isWellFormed"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "isWellFormed", prototype.IsWellFormed, 0, lengthFlags), propertyFlags),
+                ["toWellFormed"] = new LazyPropertyDescriptor<StringPrototype>(this, static prototype => new ClrFunction(prototype._engine, "toWellFormed", prototype.ToWellFormed, 0, lengthFlags), propertyFlags),
             };
             SetProperties(properties);
 
+            _originalIteratorFunction = new ClrFunction(_engine, "[Symbol.iterator]", Iterator, 0, lengthFlags);
             var symbols = new SymbolDictionary(1)
             {
-                [GlobalSymbolRegistry.Iterator] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "[Symbol.iterator]", Iterator, 0, lengthFlags), propertyFlags)
+                [GlobalSymbolRegistry.Iterator] = new PropertyDescriptor(_originalIteratorFunction, propertyFlags)
             };
             SetSymbols(symbols);
         }
+
+        internal override bool HasOriginalIterator => ReferenceEquals(Get(GlobalSymbolRegistry.Iterator), _originalIteratorFunction);
 
         private ObjectInstance Iterator(JsValue thisObject, JsValue[] arguments)
         {
@@ -108,7 +113,7 @@ namespace Jint.Native.String
             }
 
             var s = TypeConverter.ToObject(_realm, thisObject) as StringInstance;
-            if (ReferenceEquals(s, null))
+            if (s is null)
             {
                 ExceptionHelper.ThrowTypeError(_realm);
             }
@@ -231,7 +236,32 @@ namespace Jint.Native.String
         {
             TypeConverter.CheckObjectCoercible(_engine, thisObject);
             var s = TypeConverter.ToString(thisObject);
-            return new JsString(s.ToUpper(CultureInfo.InvariantCulture));
+            var culture = CultureInfo.InvariantCulture;
+            if (arguments.Length > 0 && arguments[0].IsString())
+            {
+                try
+                {
+                    var cultureArgument = arguments[0].ToString();
+                    culture = CultureInfo.GetCultureInfo(cultureArgument);
+                }
+                catch (CultureNotFoundException)
+                {
+                    ExceptionHelper.ThrowRangeError(_realm, "Incorrect culture information provided");
+                }
+            }
+            if (string.Equals("lt", culture.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                s = StringInlHelper.LithuanianStringProcessor(s);
+#if NET462
+                // Code specific to .NET Framework 4.6.2.
+                // For no good reason this verison does not upper case these characters correctly.
+                return new JsString(s.ToUpper(culture)
+                    .Replace("ϳ", "Ϳ")
+                    .Replace("ʝ", "Ʝ"));
+#endif
+            }
+
+            return new JsString(s.ToUpper(culture));
         }
 
         private JsValue ToUpperCase(JsValue thisObject, JsValue[] arguments)
@@ -736,7 +766,14 @@ namespace Jint.Native.String
             var s = TypeConverter.ToString(thisObject);
             var that = TypeConverter.ToString(arguments.At(0));
 
-            return string.CompareOrdinal(s.Normalize(NormalizationForm.FormKD), that.Normalize(NormalizationForm.FormKD));
+            var culture = Engine.Options.Culture;
+
+            if (arguments.Length > 1 && arguments[1].IsString())
+            {
+                culture = CultureInfo.GetCultureInfo(arguments.At(1).AsString());
+            }
+
+            return culture.CompareInfo.Compare(s.Normalize(NormalizationForm.FormKD), that.Normalize(NormalizationForm.FormKD));
         }
 
         /// <summary>

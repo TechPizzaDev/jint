@@ -6,6 +6,7 @@ using Jint.Native.Object;
 using Jint.Native.Symbol;
 using Jint.Runtime;
 using Jint.Runtime.Descriptors;
+using Jint.Runtime.Descriptors.Specialized;
 using Jint.Runtime.Interop;
 
 namespace Jint.Native.Function
@@ -13,7 +14,7 @@ namespace Jint.Native.Function
     /// <summary>
     /// https://tc39.es/ecma262/#sec-properties-of-the-function-prototype-object
     /// </summary>
-    internal sealed class FunctionPrototype : FunctionInstance
+    internal sealed class FunctionPrototype : Function
     {
         internal FunctionPrototype(
             Engine engine,
@@ -27,15 +28,15 @@ namespace Jint.Native.Function
 
         protected override void Initialize()
         {
-            const PropertyFlag propertyFlags = PropertyFlag.Configurable | PropertyFlag.Writable;
-            const PropertyFlag lengthFlags = PropertyFlag.Configurable;
+            const PropertyFlag PropertyFlags = PropertyFlag.Configurable | PropertyFlag.Writable;
+            const PropertyFlag LengthFlags = PropertyFlag.Configurable;
             var properties = new PropertyDictionary(7, checkExistingKeys: false)
             {
-                ["constructor"] = new PropertyDescriptor(_realm.Intrinsics.Function, PropertyFlag.NonEnumerable),
-                ["toString"] = new PropertyDescriptor(new ClrFunctionInstance(_engine, "toString", ToString, 0, lengthFlags), propertyFlags),
-                ["apply"] = new PropertyDescriptor(new ClrFunctionInstance(_engine, "apply", Apply, 2, lengthFlags), propertyFlags),
-                ["call"] = new PropertyDescriptor(new ClrFunctionInstance(_engine, "call", CallImpl, 1, lengthFlags), propertyFlags),
-                ["bind"] = new PropertyDescriptor(new ClrFunctionInstance(_engine, "bind", Bind, 1, lengthFlags), propertyFlags),
+                ["constructor"] = new LazyPropertyDescriptor<FunctionPrototype>(this, static prototype => prototype._realm.Intrinsics.Function, PropertyFlag.NonEnumerable),
+                ["toString"] = new LazyPropertyDescriptor<FunctionPrototype>(this, static prototype => new ClrFunction(prototype._engine, "toString", prototype.ToString, 0, LengthFlags), PropertyFlags),
+                ["apply"] = new LazyPropertyDescriptor<FunctionPrototype>(this, static prototype => new ClrFunction(prototype._engine, "apply", prototype.Apply, 2, LengthFlags), PropertyFlags),
+                ["call"] = new LazyPropertyDescriptor<FunctionPrototype>(this, static prototype => new ClrFunction(prototype._engine, "call", prototype.CallImpl, 1, LengthFlags), PropertyFlags),
+                ["bind"] = new LazyPropertyDescriptor<FunctionPrototype>(this, static prototype => new ClrFunction(prototype._engine, "bind", prototype.Bind, 1, LengthFlags), PropertyFlags),
                 ["arguments"] = new GetSetPropertyDescriptor.ThrowerPropertyDescriptor(_engine, PropertyFlag.Configurable),
                 ["caller"] = new GetSetPropertyDescriptor.ThrowerPropertyDescriptor(_engine, PropertyFlag.Configurable)
             };
@@ -43,7 +44,7 @@ namespace Jint.Native.Function
 
             var symbols = new SymbolDictionary(1)
             {
-                [GlobalSymbolRegistry.HasInstance] = new PropertyDescriptor(new ClrFunctionInstance(_engine, "[Symbol.hasInstance]", HasInstance, 1, PropertyFlag.Configurable), PropertyFlag.AllForbidden)
+                [GlobalSymbolRegistry.HasInstance] = new PropertyDescriptor(new ClrFunction(_engine, "[Symbol.hasInstance]", HasInstance, 1, PropertyFlag.Configurable), PropertyFlag.AllForbidden)
             };
             SetSymbols(symbols);
         }
@@ -119,10 +120,10 @@ namespace Jint.Native.Function
         /// <summary>
         /// https://tc39.es/ecma262/#sec-boundfunctioncreate
         /// </summary>
-        private BindFunctionInstance BoundFunctionCreate(ObjectInstance targetFunction, JsValue boundThis, JsValue[] boundArgs)
+        private BindFunction BoundFunctionCreate(ObjectInstance targetFunction, JsValue boundThis, JsValue[] boundArgs)
         {
             var proto = targetFunction.GetPrototypeOf();
-            var obj = new BindFunctionInstance(_engine, _realm, proto, targetFunction, boundThis, boundArgs);
+            var obj = new BindFunction(_engine, _realm, proto, targetFunction, boundThis, boundArgs);
             return obj;
         }
 
@@ -175,7 +176,7 @@ namespace Jint.Native.Function
             {
                 ExceptionHelper.ThrowTypeError(realm);
             }
-            var operations = ArrayOperations.For(argArrayObj);
+            var operations = ArrayOperations.For(argArrayObj, forWrite: false);
             var argList = elementTypes is null ? operations.GetAll() : operations.GetAll(elementTypes.Value);
             return argList;
         }

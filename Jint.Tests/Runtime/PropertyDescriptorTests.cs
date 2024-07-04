@@ -1,5 +1,5 @@
 using Jint.Native;
-using Jint.Native.Argument;
+using Jint.Native.Global;
 using Jint.Runtime.Descriptors;
 using Jint.Runtime.Descriptors.Specialized;
 using Jint.Runtime.Interop;
@@ -102,7 +102,10 @@ public class PropertyDescriptorTests
     public void LazyPropertyDescriptor()
     {
         var pd = _engine.Evaluate("globalThis").AsObject().GetOwnProperty("decodeURI");
-        if (checkType) Assert.IsType<LazyPropertyDescriptor>(pd);
+        if (checkType)
+        {
+            Assert.IsType<LazyPropertyDescriptor<GlobalObject>>(pd);
+        }
         Assert.Equal(false, pd.IsAccessorDescriptor());
         Assert.Equal(true, pd.IsDataDescriptor());
     }
@@ -167,8 +170,8 @@ public class PropertyDescriptorTests
     {
         JsValue ExtractClrAccessDescriptor(JsValue jsArugments)
         {
-            var pd = ((ArgumentsInstance) jsArugments).ParameterMap.GetOwnProperty("0");
-            return new ObjectWrapper(_engine, pd);
+            var pd = ((JsArguments) jsArugments).ParameterMap.GetOwnProperty("0");
+            return ObjectWrapper.Create(_engine, pd);
         }
         _engine.SetValue("ExtractClrAccessDescriptor", ExtractClrAccessDescriptor);
         var pdobj = _engine.Evaluate("""

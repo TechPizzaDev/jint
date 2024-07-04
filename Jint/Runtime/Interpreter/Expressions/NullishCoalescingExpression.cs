@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Esprima.Ast;
 using Jint.Native;
 
 namespace Jint.Runtime.Interpreter.Expressions
@@ -10,7 +9,7 @@ namespace Jint.Runtime.Interpreter.Expressions
         private readonly JintExpression? _right;
         private readonly JsValue? _constant;
 
-        public NullishCoalescingExpression(BinaryExpression expression) : base(expression)
+        public NullishCoalescingExpression(LogicalExpression expression) : base(expression)
         {
             _left = Build(expression.Left);
 

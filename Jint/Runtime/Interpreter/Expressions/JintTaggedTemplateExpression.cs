@@ -1,8 +1,6 @@
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Native.Object;
 using Jint.Runtime.Descriptors;
-using Jint.Runtime.References;
 
 namespace Jint.Runtime.Interpreter.Expressions;
 
@@ -86,7 +84,7 @@ internal sealed class JintTaggedTemplateExpression : JintExpression
         for (uint i = 0; i < elements.Count; ++i)
         {
             var templateElementValue = elements[(int) i].Value;
-            template.SetIndexValue(i, templateElementValue.Cooked, updateLength: false);
+            template.SetIndexValue(i, templateElementValue.Cooked ?? JsValue.Undefined, updateLength: false);
             rawObj.SetIndexValue(i, templateElementValue.Raw, updateLength: false);
         }
 

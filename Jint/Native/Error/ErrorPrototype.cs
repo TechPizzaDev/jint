@@ -36,7 +36,7 @@ namespace Jint.Native.Error
                 ["constructor"] = new PropertyDescriptor(_constructor, PropertyFlag.NonEnumerable),
                 ["message"] = new PropertyDescriptor("", PropertyFlag.Configurable | PropertyFlag.Writable),
                 ["name"] = new PropertyDescriptor(_name, PropertyFlag.Configurable | PropertyFlag.Writable),
-                ["toString"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "toString", ToString, 0, PropertyFlag.Configurable), PropertyFlag.Configurable | PropertyFlag.Writable)
+                ["toString"] = new PropertyDescriptor(new ClrFunction(Engine, "toString", ToString, 0, PropertyFlag.Configurable), PropertyFlag.Configurable | PropertyFlag.Writable)
             };
             SetProperties(properties);
         }
@@ -44,7 +44,7 @@ namespace Jint.Native.Error
         public JsValue ToString(JsValue thisObject, JsValue[] arguments)
         {
             var o = thisObject.TryCast<ObjectInstance>();
-            if (ReferenceEquals(o, null))
+            if (o is null)
             {
                 ExceptionHelper.ThrowTypeError(_realm);
             }

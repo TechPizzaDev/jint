@@ -24,6 +24,11 @@ namespace Jint.Native.RegExp
         private static readonly JsString DefaultSource = new("(?:)");
         internal static readonly JsString PropertyFlags = new("flags");
         private static readonly JsString PropertyGroups = new("groups");
+        private static readonly JsString PropertyIgnoreCase = new("ignoreCase");
+        private static readonly JsString PropertyMultiline = new("multiline");
+        private static readonly JsString PropertyDotAll = new("dotAll");
+        private static readonly JsString PropertyUnicode = new("unicode");
+        private static readonly JsString PropertyUnicodeSets = new("unicodeSets");
 
         private readonly RegExpConstructor _constructor;
         private readonly Func<JsValue, JsValue[], JsValue> _defaultExec;
@@ -46,7 +51,7 @@ namespace Jint.Native.RegExp
             GetSetPropertyDescriptor CreateGetAccessorDescriptor(string name, Func<JsRegExp, JsValue> valueExtractor, JsValue? protoValue = null)
             {
                 return new GetSetPropertyDescriptor(
-                    get: new ClrFunctionInstance(Engine, name, (thisObj, arguments) =>
+                    get: new ClrFunction(Engine, name, (thisObj, arguments) =>
                     {
                         if (ReferenceEquals(thisObj, this))
                         {
@@ -69,16 +74,16 @@ namespace Jint.Native.RegExp
             var properties = new PropertyDictionary(14, checkExistingKeys: false)
             {
                 ["constructor"] = new PropertyDescriptor(_constructor, propertyFlags),
-                ["toString"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "toString", ToRegExpString, 0, lengthFlags), propertyFlags),
-                ["exec"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "exec", _defaultExec, 1, lengthFlags), propertyFlags),
-                ["test"] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "test", Test, 1, lengthFlags), propertyFlags),
+                ["toString"] = new PropertyDescriptor(new ClrFunction(Engine, "toString", ToRegExpString, 0, lengthFlags), propertyFlags),
+                ["exec"] = new PropertyDescriptor(new ClrFunction(Engine, "exec", _defaultExec, 1, lengthFlags), propertyFlags),
+                ["test"] = new PropertyDescriptor(new ClrFunction(Engine, "test", Test, 1, lengthFlags), propertyFlags),
                 ["dotAll"] = CreateGetAccessorDescriptor("get dotAll", static r => r.DotAll),
-                ["flags"] = new GetSetPropertyDescriptor(get: new ClrFunctionInstance(Engine, "get flags", Flags, 0, lengthFlags), set: Undefined, flags: PropertyFlag.Configurable),
+                ["flags"] = new GetSetPropertyDescriptor(get: new ClrFunction(Engine, "get flags", Flags, 0, lengthFlags), set: Undefined, flags: PropertyFlag.Configurable),
                 ["global"] = CreateGetAccessorDescriptor("get global", static r => r.Global),
                 ["hasIndices"] = CreateGetAccessorDescriptor("get hasIndices", static r => r.Indices),
                 ["ignoreCase"] = CreateGetAccessorDescriptor("get ignoreCase", static r => r.IgnoreCase),
                 ["multiline"] = CreateGetAccessorDescriptor("get multiline", static r => r.Multiline),
-                ["source"] = new GetSetPropertyDescriptor(get: new ClrFunctionInstance(Engine, "get source", Source, 0, lengthFlags), set: Undefined, flags: PropertyFlag.Configurable),
+                ["source"] = new GetSetPropertyDescriptor(get: new ClrFunction(Engine, "get source", Source, 0, lengthFlags), set: Undefined, flags: PropertyFlag.Configurable),
                 ["sticky"] = CreateGetAccessorDescriptor("get sticky", static r => r.Sticky),
                 ["unicode"] = CreateGetAccessorDescriptor("get unicode", static r => r.FullUnicode),
                 ["unicodeSets"] = CreateGetAccessorDescriptor("get unicodeSets", static r => r.UnicodeSets)
@@ -87,11 +92,11 @@ namespace Jint.Native.RegExp
 
             var symbols = new SymbolDictionary(5)
             {
-                [GlobalSymbolRegistry.Match] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "[Symbol.match]", Match, 1, lengthFlags), propertyFlags),
-                [GlobalSymbolRegistry.MatchAll] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "[Symbol.matchAll]", MatchAll, 1, lengthFlags), propertyFlags),
-                [GlobalSymbolRegistry.Replace] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "[Symbol.replace]", Replace, 2, lengthFlags), propertyFlags),
-                [GlobalSymbolRegistry.Search] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "[Symbol.search]", Search, 1, lengthFlags), propertyFlags),
-                [GlobalSymbolRegistry.Split] = new PropertyDescriptor(new ClrFunctionInstance(Engine, "[Symbol.split]", Split, 2, lengthFlags), propertyFlags)
+                [GlobalSymbolRegistry.Match] = new PropertyDescriptor(new ClrFunction(Engine, "[Symbol.match]", Match, 1, lengthFlags), propertyFlags),
+                [GlobalSymbolRegistry.MatchAll] = new PropertyDescriptor(new ClrFunction(Engine, "[Symbol.matchAll]", MatchAll, 1, lengthFlags), propertyFlags),
+                [GlobalSymbolRegistry.Replace] = new PropertyDescriptor(new ClrFunction(Engine, "[Symbol.replace]", Replace, 2, lengthFlags), propertyFlags),
+                [GlobalSymbolRegistry.Search] = new PropertyDescriptor(new ClrFunction(Engine, "[Symbol.search]", Search, 1, lengthFlags), propertyFlags),
+                [GlobalSymbolRegistry.Split] = new PropertyDescriptor(new ClrFunction(Engine, "[Symbol.split]", Split, 2, lengthFlags), propertyFlags)
             };
             SetSymbols(symbols);
         }
@@ -239,7 +244,7 @@ namespace Jint.Native.RegExp
             for (var i = 0; i < results.Count; i++)
             {
                 var result = results[i];
-                var nCaptures = (int) result.Length;
+                var nCaptures = (int) result.GetLength();
                 nCaptures = System.Math.Max(nCaptures - 1, 0);
                 var matched = TypeConverter.ToString(result.Get(0));
                 var matchLength = matched.Length;
@@ -591,11 +596,11 @@ namespace Jint.Native.RegExp
 
             var result = AddFlagIfPresent(r, "hasIndices", 'd', "");
             result = AddFlagIfPresent(r, PropertyGlobal, 'g', result);
-            result = AddFlagIfPresent(r, "ignoreCase", 'i', result);
-            result = AddFlagIfPresent(r, "multiline", 'm', result);
-            result = AddFlagIfPresent(r, "dotAll", 's', result);
-            result = AddFlagIfPresent(r, "unicode", 'u', result);
-            result = AddFlagIfPresent(r, "unicodeSets", 'v', result);
+            result = AddFlagIfPresent(r, PropertyIgnoreCase, 'i', result);
+            result = AddFlagIfPresent(r, PropertyMultiline, 'm', result);
+            result = AddFlagIfPresent(r, PropertyDotAll, 's', result);
+            result = AddFlagIfPresent(r, PropertyUnicode, 'u', result);
+            result = AddFlagIfPresent(r, PropertyUnicodeSets, 'v', result);
             result = AddFlagIfPresent(r, PropertySticky, 'y', result);
 
             return result;
@@ -837,7 +842,7 @@ namespace Jint.Native.RegExp
             return RegExpBuiltinExec(ri, s);
         }
 
-        internal bool HasDefaultExec => Get(PropertyExec) is ClrFunctionInstance functionInstance && functionInstance._func == _defaultExec;
+        internal bool HasDefaultExec => Get(PropertyExec) is ClrFunction functionInstance && functionInstance._func == _defaultExec;
 
         /// <summary>
         /// https://tc39.es/ecma262/#sec-regexpbuiltinexec
@@ -873,7 +878,7 @@ namespace Jint.Native.RegExp
             var fullUnicode = R.FullUnicode;
             var hasIndices = R.Indices;
 
-            if (!global & !sticky && !fullUnicode && !hasIndices)
+            if (!global && !sticky && !fullUnicode && !hasIndices)
             {
                 // we can the non-stateful fast path which is the common case
                 var m = matcher.Match(s, (int) lastIndex);

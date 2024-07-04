@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using Esprima;
 using Jint.Collections;
 using Jint.Native.Function;
 using Jint.Native.Object;
@@ -33,7 +32,7 @@ namespace Jint.Native.RegExp
         {
             var symbols = new SymbolDictionary(1)
             {
-                [GlobalSymbolRegistry.Species] = new GetSetPropertyDescriptor(get: new ClrFunctionInstance(_engine, "get [Symbol.species]", (thisObj, _) => thisObj, 0, PropertyFlag.Configurable), set: Undefined, PropertyFlag.Configurable)
+                [GlobalSymbolRegistry.Species] = new GetSetPropertyDescriptor(get: new ClrFunction(_engine, "get [Symbol.species]", (thisObj, _) => thisObj, 0, PropertyFlag.Configurable), set: Undefined, PropertyFlag.Configurable)
             };
             SetSymbols(symbols);
         }
@@ -102,9 +101,12 @@ namespace Jint.Native.RegExp
 
             var f = flags.IsUndefined() ? "" : TypeConverter.ToString(flags);
 
+            var parserOptions = _engine.GetActiveParserOptions();
             try
             {
-                var regExpParseResult = Scanner.AdaptRegExp(p, f, compiled: false, _engine.Options.Constraints.RegexTimeout);
+                var regExpParseResult = Tokenizer.AdaptRegExp(p, f, compiled: false, parserOptions.RegexTimeout,
+                    ecmaVersion: parserOptions.EcmaVersion,
+                    experimentalESFeatures: parserOptions.ExperimentalESFeatures);
 
                 if (!regExpParseResult.Success)
                 {

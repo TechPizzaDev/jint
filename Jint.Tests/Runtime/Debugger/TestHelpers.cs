@@ -1,5 +1,4 @@
-﻿using Esprima.Ast;
-using Jint.Runtime.Debugger;
+﻿using Jint.Runtime.Debugger;
 
 namespace Jint.Tests.Runtime.Debugger
 {
@@ -10,7 +9,7 @@ namespace Jint.Tests.Runtime.Debugger
             return node switch
             {
                 Directive directive => requiredValue == null || directive.Value == requiredValue,
-                ExpressionStatement expr => requiredValue == null || (expr.Expression is Literal literal && literal.StringValue == requiredValue),
+                NonSpecialExpressionStatement expr => requiredValue == null || (expr.Expression is StringLiteral literal && literal.Value == requiredValue),
                 _ => false
             };
         }
@@ -34,7 +33,7 @@ namespace Jint.Tests.Runtime.Debugger
             );
 
             bool didBreak = false;
-            engine.DebugHandler.Break += (DebugHandler sender, ref DebugInformation info) =>
+            engine.Debugger.Break += (DebugHandler sender, ref DebugInformation info) =>
             {
                 didBreak = true;
                 breakHandler(engine, info);

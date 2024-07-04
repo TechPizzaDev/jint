@@ -10,11 +10,14 @@
     <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>
     <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
     <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+    <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <AssemblyOriginatorKeyFile>..\Jint\Jint.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>
     <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);CS8002</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <None Include=".\Scripts\*.*" CopyToOutputDirectory="PreserveNewest" />
@@ -26,8 +29,11 @@
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Jurassic" />
-    <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="NiL.JS" />
     <PackageReference Include="YantraJS.Core" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Acornima" />
+    <Using Include="Acornima.Ast" />
   </ItemGroup>
 </Project>

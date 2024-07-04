@@ -1,4 +1,3 @@
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Native.Iterator;
 
@@ -32,7 +31,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                 {
                     var expression = Build(expr);
                     expressions[n] = expression;
-                    _hasSpreads |= expr.Type == Nodes.SpreadElement;
+                    _hasSpreads |= expr.Type == NodeType.SpreadElement;
                 }
             }
 
@@ -119,7 +118,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         internal sealed class JintEmptyArrayExpression : JintExpression
         {
-            public static JintEmptyArrayExpression Instance = new(new ArrayExpression(NodeList.Create(System.Linq.Enumerable.Empty<Expression?>())));
+            public static JintEmptyArrayExpression Instance = new(new ArrayExpression(NodeList.From(Array.Empty<Expression?>())));
 
             private JintEmptyArrayExpression(Expression expression) : base(expression)
             {

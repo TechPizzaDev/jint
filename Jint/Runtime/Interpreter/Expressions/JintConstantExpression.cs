@@ -1,4 +1,3 @@
-using Esprima.Ast;
 using Jint.Native;
 
 namespace Jint.Runtime.Interpreter.Expressions;
@@ -14,6 +13,8 @@ internal sealed class JintConstantExpression : JintExpression
     {
         _value = value;
     }
+
+    public JsValue Value => _value;
 
     public override JsValue GetValue(EvaluationContext context) => _value;
 

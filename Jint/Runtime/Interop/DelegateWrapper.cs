@@ -4,13 +4,16 @@ using Jint.Extensions;
 using Jint.Native;
 using Jint.Native.Function;
 
+#pragma warning disable IL2072
+#pragma warning disable IL3050
+
 namespace Jint.Runtime.Interop
 {
     /// <summary>
     /// Represents a FunctionInstance wrapper around a CLR method. This is used by user to pass
     /// custom methods to the engine.
     /// </summary>
-    public sealed class DelegateWrapper : FunctionInstance
+    internal sealed class DelegateWrapper : Function
     {
         private static readonly JsString _name = new JsString("delegate");
         private readonly Delegate _d;
@@ -56,7 +59,7 @@ namespace Jint.Runtime.Interop
             int jsArgumentsCount = arguments.Length;
             int jsArgumentsWithoutParamsCount = Math.Min(jsArgumentsCount, delegateNonParamsArgumentsCount);
 
-            var clrTypeConverter = Engine.ClrTypeConverter;
+            var clrTypeConverter = Engine.TypeConverter;
             var valueCoercionType = Engine.Options.Interop.ValueCoercion;
             var parameters = new object?[delegateArgumentsCount];
 
@@ -116,7 +119,7 @@ namespace Jint.Runtime.Interop
                     }
                     else if (!ReflectionExtensions.TryConvertViaTypeCoercion(paramsParameterType, valueCoercionType, value, out converted))
                     {
-                        converted = Engine.ClrTypeConverter.Convert(
+                        converted = Engine.TypeConverter.Convert(
                             value.ToObject(),
                             paramsParameterType!,
                             CultureInfo.InvariantCulture);
@@ -131,11 +134,11 @@ namespace Jint.Runtime.Interop
             try
             {
                 var result = _d.DynamicInvoke(parameters);
-                if (result is not Task task)
+                if (!IsAwaitable(result))
                 {
                     return FromObject(Engine, result);
                 }
-                return ConvertTaskToPromise(task);
+                return ConvertAwaitableToPromise(Engine, result!);
             }
             catch (TargetInvocationException exception)
             {
@@ -144,51 +147,34 @@ namespace Jint.Runtime.Interop
             }
         }
 
-        private JsValue ConvertTaskToPromise(Task task)
+        private static bool IsAwaitable(object? obj)
         {
-            var (promise, resolve, reject) = Engine.RegisterPromise();
-            task = task.ContinueWith(continuationAction =>
+            if (obj is null)
             {
-                if (continuationAction.IsFaulted)
-                {
-                    reject(FromObject(Engine, continuationAction.Exception));
-                }
-                else if (continuationAction.IsCanceled)
-                {
-                    reject(FromObject(Engine, new ExecutionCanceledException()));
-                }
-                else
-                {
-                    // Special case: Marshal `async Task` as undefined, as this is `Task<VoidTaskResult>` at runtime
-                    // See https://github.com/sebastienros/jint/pull/1567#issuecomment-1681987702
-                    if (Task.CompletedTask.Equals(continuationAction))
-                    {
-                        resolve(FromObject(Engine, JsValue.Undefined));
-                        return;
-                    }
-
-                    var result = continuationAction.GetType().GetProperty(nameof(Task<object>.Result));
-                    if (result is not null)
-                    {
-                        resolve(FromObject(Engine, result.GetValue(continuationAction)));
-                    }
-                    else
-                    {
-                        resolve(FromObject(Engine, JsValue.Undefined));
-                    }
-                }
-            });
-
-            Engine.AddToEventLoop(() =>
+                return false;
+            }
+            if (obj is Task)
             {
-                if (!task.IsCompleted)
-                {
-                    // Task.Wait has the potential of inlining the task's execution on the current thread; avoid this.
-                    ((IAsyncResult) task).AsyncWaitHandle.WaitOne();
-                }
-            });
+                return true;
+            }
+#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP
+            if (obj is ValueTask)
+            {
+                return true;
+            }
 
-            return promise;
+            // ValueTask<T> is not derived from ValueTask, so we need to check for it explicitly
+            var type = obj.GetType();
+            if (!type.IsGenericType)
+            {
+                return false;
+            }
+
+            return type.GetGenericTypeDefinition() == typeof(ValueTask<>);
+#else
+            return false;
+#endif
         }
+
     }
 }

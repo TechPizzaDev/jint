@@ -1,12 +1,11 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Native.Function;
 using Jint.Native.Object;
 using Jint.Runtime.CallStack;
 using Jint.Runtime.Environments;
-using Jint.Runtime.References;
+using Environment = Jint.Runtime.Environments.Environment;
 
 namespace Jint.Runtime.Interpreter.Expressions
 {
@@ -41,7 +40,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                     return false;
                 }
 
-                return e.Type == Nodes.SpreadElement || e is AssignmentExpression { Right.Type: Nodes.SpreadElement };
+                return e.Type == NodeType.SpreadElement || e is AssignmentExpression { Right.Type: NodeType.SpreadElement };
             }
 
             var cacheable = true;
@@ -49,7 +48,7 @@ namespace Jint.Runtime.Interpreter.Expressions
             {
                 var expressionArgument = expressionArguments[i];
                 cachedArgumentsHolder.JintArguments[i] = Build(expressionArgument);
-                cacheable &= expressionArgument.Type == Nodes.Literal;
+                cacheable &= expressionArgument.Type == NodeType.Literal;
                 _hasSpreads |= CanSpread(expressionArgument);
                 if (expressionArgument is ArrayExpression ae)
                 {
@@ -90,7 +89,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                 return StackGuard.RunOnEmptyStack(EvaluateInternal, context);
             }
 
-            if (_calleeExpression._expression.Type == Nodes.Super)
+            if (_calleeExpression._expression.Type == NodeType.Super)
             {
                 return SuperCall(context);
             }
@@ -145,7 +144,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                     }
                     else
                     {
-                        var refEnv = (EnvironmentRecord) baseValue;
+                        var refEnv = (Environment) baseValue;
                         thisObject = refEnv.WithBaseObject();
                     }
                 }
@@ -177,7 +176,7 @@ namespace Jint.Runtime.Interpreter.Expressions
             // ensure logic is in sync between Call, Construct and JintCallExpression!
 
             JsValue result;
-            if (callable is FunctionInstance functionInstance)
+            if (callable is Function functionInstance)
             {
                 var callStack = engine.CallStack;
                 var recursionDepth = callStack.Push(functionInstance, _calleeExpression, engine.ExecutionContext);
@@ -241,7 +240,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                 return JsValue.Undefined;
             }
 
-            var evalFunctionInstance = (EvalFunctionInstance) func;
+            var evalFunctionInstance = (EvalFunction) func;
             var evalArg = argList[0];
             var strictCaller = StrictModeScope.IsStrictModeCode;
             var evalRealm = evalFunctionInstance._realm;
@@ -254,7 +253,7 @@ namespace Jint.Runtime.Interpreter.Expressions
         private ObjectInstance SuperCall(EvaluationContext context)
         {
             var engine = context.Engine;
-            var thisEnvironment = (FunctionEnvironmentRecord) engine.ExecutionContext.GetThisEnvironment();
+            var thisEnvironment = (FunctionEnvironment) engine.ExecutionContext.GetThisEnvironment();
             var newTarget = engine.GetNewTarget(thisEnvironment);
             var func = GetSuperConstructor(thisEnvironment);
             if (func is null || !func.IsConstructor)
@@ -266,11 +265,11 @@ namespace Jint.Runtime.Interpreter.Expressions
             var argList = defaultSuperCall ? DefaultSuperCallArgumentListEvaluation(context) : ArgumentListEvaluation(context);
             var result = ((IConstructor) func).Construct(argList, newTarget);
 
-            var thisER = (FunctionEnvironmentRecord) engine.ExecutionContext.GetThisEnvironment();
+            var thisER = (FunctionEnvironment) engine.ExecutionContext.GetThisEnvironment();
             thisER.BindThisValue(result);
             var F = thisER._functionObject;
 
-            result.InitializeInstanceElements((ScriptFunctionInstance) F);
+            result.InitializeInstanceElements((ScriptFunction) F);
 
             return result;
         }
@@ -278,7 +277,7 @@ namespace Jint.Runtime.Interpreter.Expressions
         /// <summary>
         /// https://tc39.es/ecma262/#sec-getsuperconstructor
         /// </summary>
-        private static ObjectInstance? GetSuperConstructor(FunctionEnvironmentRecord thisEnvironment)
+        private static ObjectInstance? GetSuperConstructor(FunctionEnvironment thisEnvironment)
         {
             var envRec = thisEnvironment;
             var activeFunction = envRec._functionObject;

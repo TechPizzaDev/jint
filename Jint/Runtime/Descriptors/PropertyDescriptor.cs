@@ -390,19 +390,19 @@ namespace Jint.Runtime.Descriptors
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsAccessorDescriptor()
         {
-            return !ReferenceEquals(Get, null) || !ReferenceEquals(Set, null);
+            return Get is not null || Set is not null;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsDataDescriptor()
         {
-            if (_flags.HasFlag(PropertyFlag.NonData))
+            if ((_flags & PropertyFlag.NonData) != PropertyFlag.None)
             {
                 return false;
             }
             return (_flags & (PropertyFlag.WritableSet | PropertyFlag.Writable)) != PropertyFlag.None
-                   || (_flags & PropertyFlag.CustomJsValue) != PropertyFlag.None && !ReferenceEquals(CustomValue, null)
-                   || !ReferenceEquals(_value, null);
+                   || (_flags & PropertyFlag.CustomJsValue) != PropertyFlag.None && CustomValue is not null
+                   || _value is not null;
         }
 
         /// <summary>
@@ -413,41 +413,6 @@ namespace Jint.Runtime.Descriptors
         public bool IsGenericDescriptor()
         {
             return !IsDataDescriptor() && !IsAccessorDescriptor();
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal bool TryGetValue(ObjectInstance thisArg, out JsValue value)
-        {
-            value = JsValue.Undefined;
-
-            // IsDataDescriptor logic inlined
-            if ((_flags & (PropertyFlag.WritableSet | PropertyFlag.Writable)) != PropertyFlag.None)
-            {
-                var val = (_flags & PropertyFlag.CustomJsValue) != PropertyFlag.None
-                    ? CustomValue
-                    : _value;
-
-                if (!ReferenceEquals(val, null))
-                {
-                    value = val;
-                    return true;
-                }
-            }
-
-            if (this == Undefined)
-            {
-                return false;
-            }
-
-            var getter = Get;
-            if (!ReferenceEquals(getter, null) && !getter.IsUndefined())
-            {
-                // if getter is not undefined it must be ICallable
-                var callable = (ICallable) getter;
-                value = callable.Call(thisArg, Arguments.Empty);
-            }
-
-            return true;
         }
 
         private sealed class UndefinedPropertyDescriptor : PropertyDescriptor

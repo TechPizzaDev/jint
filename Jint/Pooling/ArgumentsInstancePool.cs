@@ -1,41 +1,39 @@
 using Jint.Native;
-using Jint.Native.Argument;
 using Jint.Native.Function;
 using Jint.Runtime.Environments;
-using Jint.Runtime.References;
 
 namespace Jint.Pooling
 {
     /// <summary>
-    /// Cache reusable <see cref="Reference" /> instances as we allocate them a lot.
+    /// Cache reusable <see cref="JsArguments" /> instances as we allocate them a lot.
     /// </summary>
     internal sealed class ArgumentsInstancePool
     {
         private const int PoolSize = 10;
         private readonly Engine _engine;
-        private readonly ObjectPool<ArgumentsInstance> _pool;
+        private readonly ObjectPool<JsArguments> _pool;
 
         public ArgumentsInstancePool(Engine engine)
         {
             _engine = engine;
-            _pool = new ObjectPool<ArgumentsInstance>(Factory, PoolSize);
+            _pool = new ObjectPool<JsArguments>(Factory, PoolSize);
         }
 
-        private ArgumentsInstance Factory()
+        private JsArguments Factory()
         {
-            return new ArgumentsInstance(_engine)
+            return new JsArguments(_engine)
             {
                 _prototype = _engine.Realm.Intrinsics.Object.PrototypeObject
             };
         }
 
-        public ArgumentsInstance Rent(JsValue[] argumentsList) => Rent(null, null, argumentsList, null, false);
+        public JsArguments Rent(JsValue[] argumentsList) => Rent(null, null, argumentsList, null, false);
 
-        public ArgumentsInstance Rent(
-            FunctionInstance? func,
+        public JsArguments Rent(
+            Function? func,
             Key[]? formals,
             JsValue[] argumentsList,
-            DeclarativeEnvironmentRecord? env,
+            DeclarativeEnvironment? env,
             bool hasRestParameter)
         {
             var obj = _pool.Allocate();
@@ -43,9 +41,9 @@ namespace Jint.Pooling
             return obj;
         }
 
-        public void Return(ArgumentsInstance instance)
+        public void Return(JsArguments instance)
         {
-            if (ReferenceEquals(instance, null))
+            if (instance is null)
             {
                 return;
             }

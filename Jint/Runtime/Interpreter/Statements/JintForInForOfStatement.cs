@@ -1,10 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Native.Iterator;
 using Jint.Runtime.Environments;
 using Jint.Runtime.Interpreter.Expressions;
-using Jint.Runtime.References;
+using Environment = Jint.Runtime.Environments.Environment;
 
 namespace Jint.Runtime.Interpreter.Statements
 {
@@ -20,9 +19,9 @@ namespace Jint.Runtime.Interpreter.Statements
 
         private ProbablyBlockStatement _body;
         private JintExpression? _expr;
-        private BindingPattern? _assignmentPattern;
+        private DestructuringPattern? _assignmentPattern;
         private JintExpression _right = null!;
-        private List<string>? _tdzNames;
+        private List<Key>? _tdzNames;
         private bool _destructuring;
         private LhsKind _lhsKind;
 
@@ -56,14 +55,14 @@ namespace Jint.Runtime.Interpreter.Statements
                 var id = variableDeclarationDeclaration.Id;
                 if (_lhsKind == LhsKind.LexicalBinding)
                 {
-                    _tdzNames = new List<string>(1);
+                    _tdzNames = new List<Key>(1);
                     id.GetBoundNames(_tdzNames);
                 }
 
-                if (id is BindingPattern bindingPattern)
+                if (id is DestructuringPattern pattern)
                 {
                     _destructuring = true;
-                    _assignmentPattern = bindingPattern;
+                    _assignmentPattern = pattern;
                 }
                 else
                 {
@@ -71,10 +70,10 @@ namespace Jint.Runtime.Interpreter.Statements
                     _expr = new JintIdentifierExpression(identifier);
                 }
             }
-            else if (_leftNode is BindingPattern bindingPattern)
+            else if (_leftNode is DestructuringPattern pattern)
             {
                 _destructuring = true;
-                _assignmentPattern = bindingPattern;
+                _assignmentPattern = pattern;
             }
             else if (_leftNode is MemberExpression memberExpression)
             {
@@ -160,13 +159,13 @@ namespace Jint.Runtime.Interpreter.Statements
             var completionType = CompletionType.Normal;
             var close = false;
 
-            var debugHandler = context.DebugMode ? context.Engine.DebugHandler : null;
+            var debugHandler = context.DebugMode ? context.Engine.Debugger : null;
 
             try
             {
                 while (true)
                 {
-                    EnvironmentRecord? iterationEnv = null;
+                    Environment? iterationEnv = null;
                     if (!iteratorRecord.TryIteratorStep(out var nextResult))
                     {
                         close = true;
@@ -220,7 +219,7 @@ namespace Jint.Runtime.Interpreter.Statements
                         else
                         {
                             var reference = (Reference) lhsRef;
-                            if (lhsKind == LhsKind.LexicalBinding || _leftNode.Type == Nodes.Identifier && !reference.IsUnresolvableReference)
+                            if (lhsKind == LhsKind.LexicalBinding || _leftNode.Type == NodeType.Identifier && !reference.IsUnresolvableReference)
                             {
                                 reference.InitializeReferencedBinding(nextValue);
                             }
@@ -232,7 +231,7 @@ namespace Jint.Runtime.Interpreter.Statements
                     }
                     else
                     {
-                        nextValue = BindingPatternAssignmentExpression.ProcessPatterns(
+                        nextValue = DestructuringPatternAssignmentExpression.ProcessPatterns(
                             context,
                             _assignmentPattern!,
                             nextValue,
@@ -278,7 +277,7 @@ namespace Jint.Runtime.Interpreter.Statements
                     var result = stmt.Execute(context);
                     engine.UpdateLexicalEnvironment(oldEnv);
 
-                    if (!ReferenceEquals(result.Value, null))
+                    if (!result.Value.IsEmpty)
                     {
                         v = result.Value;
                     }
@@ -292,6 +291,11 @@ namespace Jint.Runtime.Interpreter.Statements
                     if (result.Type != CompletionType.Continue || (context.Target != null && !string.Equals(context.Target, _statement?.LabelSet?.Name, StringComparison.Ordinal)))
                     {
                         completionType = result.Type;
+                        if (iterationKind == IterationKind.Enumerate)
+                        {
+                            // TODO es6-generators make sure we can start from where we left off
+                            //return result;
+                        }
                         if (result.IsAbrupt())
                         {
                             close = true;
@@ -330,11 +334,11 @@ namespace Jint.Runtime.Interpreter.Statements
             }
         }
 
-        private void BindingInstantiation(EnvironmentRecord environment)
+        private void BindingInstantiation(Environment environment)
         {
-            var envRec = (DeclarativeEnvironmentRecord) environment;
+            var envRec = (DeclarativeEnvironment) environment;
             var variableDeclaration = (VariableDeclaration) _leftNode;
-            var boundNames = new List<string>();
+            var boundNames = new List<Key>();
             variableDeclaration.GetBoundNames(boundNames);
             for (var i = 0; i < boundNames.Count; i++)
             {

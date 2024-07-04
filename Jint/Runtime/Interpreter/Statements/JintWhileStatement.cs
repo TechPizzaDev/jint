@@ -1,4 +1,3 @@
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Runtime.Interpreter.Expressions;
 
@@ -26,7 +25,7 @@ namespace Jint.Runtime.Interpreter.Statements
 
         protected override Completion ExecuteInternal(EvaluationContext context)
         {
-            var debugHandler = context.DebugMode ? context.Engine.DebugHandler : null;
+            var debugHandler = context.DebugMode ? context.Engine.Debugger : null;
 
             var v = JsValue.Undefined;
             while (true)
@@ -41,7 +40,7 @@ namespace Jint.Runtime.Interpreter.Statements
 
                 var completion = _body.Execute(context);
 
-                if (!ReferenceEquals(completion.Value, null))
+                if (!completion.Value.IsEmpty)
                 {
                     v = completion.Value;
                 }

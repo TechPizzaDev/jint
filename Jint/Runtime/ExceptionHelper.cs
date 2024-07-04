@@ -1,13 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
-using Esprima;
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Native.Error;
 using Jint.Runtime.CallStack;
 using Jint.Runtime.Modules;
-using Jint.Runtime.References;
 
 namespace Jint.Runtime
 {
@@ -25,7 +22,7 @@ namespace Jint.Runtime
         }
 
         [DoesNotReturn]
-        public static void ThrowSyntaxError(Realm realm, string message, Location location)
+        public static void ThrowSyntaxError(Realm realm, string message, in SourceLocation location)
         {
             throw new JavaScriptException(realm.Intrinsics.SyntaxError, message).SetJavaScriptLocation(location);
         }
@@ -149,7 +146,7 @@ namespace Jint.Runtime
         }
 
         [DoesNotReturn]
-        public static void ThrowJavaScriptException(Engine engine, JsValue value, in Location location)
+        public static void ThrowJavaScriptException(Engine engine, JsValue value, in SourceLocation location)
         {
             throw new JavaScriptException(value).SetJavaScriptCallstack(engine, location);
         }
@@ -216,6 +213,18 @@ namespace Jint.Runtime
         public static void ThrowModuleResolutionException(string message, string specifier, string? parent, string? filePath = null)
         {
             throw new ModuleResolutionException(message, specifier, parent, filePath);
+        }
+
+        [DoesNotReturn]
+        public static void ThrowInvalidPreparedScriptArgumentException(string paramName)
+        {
+            throw new ArgumentException($"Instances of {typeof(Prepared<Script>)} returned by {nameof(Engine.PrepareScript)} are allowed only.", paramName);
+        }
+
+        [DoesNotReturn]
+        public static void ThrowInvalidPreparedModuleArgumentException(string paramName)
+        {
+            throw new ArgumentException($"Instances of {typeof(Prepared<AstModule>)} returned by {nameof(Engine.PrepareModule)} are allowed only.", paramName);
         }
     }
 }

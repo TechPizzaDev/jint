@@ -1,5 +1,4 @@
-﻿using Esprima.Ast;
-using Jint.Runtime.Debugger;
+﻿using Jint.Runtime.Debugger;
 
 namespace Jint.Tests.Runtime.Debugger
 {
@@ -12,7 +11,7 @@ namespace Jint.Tests.Runtime.Debugger
                 .InitialStepMode(StepMode.Into));
 
             var nodes = new List<Node>();
-            engine.DebugHandler.Step += (DebugHandler sender, ref DebugInformation info) =>
+            engine.Debugger.Step += (DebugHandler sender, ref DebugInformation info) =>
             {
                 nodes.Add(info.CurrentNode);
                 return StepMode.Into;
@@ -39,11 +38,11 @@ namespace Jint.Tests.Runtime.Debugger
             Assert.Collection(nodes,
                 node => Assert.IsType<VariableDeclaration>(node), // let x = 0;
                 node => Assert.IsType<WhileStatement>(node),      // while ...
-                node => Assert.IsType<BinaryExpression>(node),    // x < 2
-                node => Assert.IsType<ExpressionStatement>(node), // x++;
-                node => Assert.IsType<BinaryExpression>(node),    // x < 2
-                node => Assert.IsType<ExpressionStatement>(node), // x++;
-                node => Assert.IsType<BinaryExpression>(node)     // x < 2 (false)
+                node => Assert.IsType<NonLogicalBinaryExpression>(node),    // x < 2
+                node => Assert.IsType<NonSpecialExpressionStatement>(node), // x++;
+                node => Assert.IsType<NonLogicalBinaryExpression>(node),    // x < 2
+                node => Assert.IsType<NonSpecialExpressionStatement>(node), // x++;
+                node => Assert.IsType<NonLogicalBinaryExpression>(node)     // x < 2 (false)
             );
         }
 
@@ -64,10 +63,10 @@ namespace Jint.Tests.Runtime.Debugger
             Assert.Collection(nodes,
                 node => Assert.IsType<VariableDeclaration>(node), // let x = 0;
                 node => Assert.IsType<DoWhileStatement>(node),    // do ...
-                node => Assert.IsType<ExpressionStatement>(node), // x++;
-                node => Assert.IsType<BinaryExpression>(node),    // x < 2
-                node => Assert.IsType<ExpressionStatement>(node), // x++;
-                node => Assert.IsType<BinaryExpression>(node)     // x < 2 (false)
+                node => Assert.IsType<NonSpecialExpressionStatement>(node), // x++;
+                node => Assert.IsType<NonLogicalBinaryExpression>(node),    // x < 2
+                node => Assert.IsType<NonSpecialExpressionStatement>(node), // x++;
+                node => Assert.IsType<NonLogicalBinaryExpression>(node)     // x < 2 (false)
             );
         }
 
@@ -86,13 +85,13 @@ namespace Jint.Tests.Runtime.Debugger
             Assert.Collection(nodes,
                 node => Assert.IsType<ForStatement>(node),        // for ...
                 node => Assert.IsType<VariableDeclaration>(node), // let x = 0
-                node => Assert.IsType<BinaryExpression>(node),    // x < 2
+                node => Assert.IsType<NonLogicalBinaryExpression>(node),    // x < 2
                 node => Assert.True(node.IsLiteral("dummy")),     // 'dummy';
                 node => Assert.IsType<UpdateExpression>(node),    // x++;
-                node => Assert.IsType<BinaryExpression>(node),    // x < 2
+                node => Assert.IsType<NonLogicalBinaryExpression>(node),    // x < 2
                 node => Assert.True(node.IsLiteral("dummy")),     // 'dummy';
                 node => Assert.IsType<UpdateExpression>(node),    // x++;
-                node => Assert.IsType<BinaryExpression>(node)     // x < 2 (false)
+                node => Assert.IsType<NonLogicalBinaryExpression>(node)     // x < 2 (false)
             );
         }
 
@@ -136,9 +135,9 @@ namespace Jint.Tests.Runtime.Debugger
                 node => Assert.IsType<VariableDeclaration>(node), // let obj = { x: 1, y: 2 };
                 node => Assert.IsType<ForInStatement>(node),      // for ...
                 node => Assert.IsType<VariableDeclaration>(node), // key
-                node => Assert.IsType<ExpressionStatement>(node), // 'dummy';
+                node => Assert.IsType<NonSpecialExpressionStatement>(node), // 'dummy';
                 node => Assert.IsType<VariableDeclaration>(node), // key
-                node => Assert.IsType<ExpressionStatement>(node)  // 'dummy';
+                node => Assert.IsType<NonSpecialExpressionStatement>(node)  // 'dummy';
             );
         }
 
@@ -161,7 +160,7 @@ namespace Jint.Tests.Runtime.Debugger
 
             Assert.Collection(nodes,
                 node => Assert.IsType<ClassDeclaration>(node),          // class Test
-                node => Assert.IsType<ExpressionStatement>(node),       // new Test();
+                node => Assert.IsType<NonSpecialExpressionStatement>(node),       // new Test();
                 node => Assert.True(node.IsLiteral("in constructor")),  // 'in constructor()'
                 node => Assert.Null(node),                              // return point
                 node => Assert.True(node.IsLiteral("after construction"))
@@ -183,7 +182,7 @@ namespace Jint.Tests.Runtime.Debugger
 
             Assert.Collection(nodes,
                 node => Assert.IsType<FunctionDeclaration>(node), // function(test) ...;
-                node => Assert.IsType<ExpressionStatement>(node), // test();
+                node => Assert.IsType<NonSpecialExpressionStatement>(node), // test();
                 node => Assert.True(node.IsLiteral("dummy")),     // 'dummy';
                 node => Assert.Null(node)                         // return point
             );
@@ -203,9 +202,79 @@ namespace Jint.Tests.Runtime.Debugger
             var nodes = CollectStepNodes(script);
             Assert.Collection(nodes,
                 node => Assert.IsType<ClassDeclaration>(node),    // class Test
-                node => Assert.IsType<ExpressionStatement>(node), // new Test();
+                node => Assert.IsType<NonSpecialExpressionStatement>(node), // new Test();
                 node => Assert.True(node.IsLiteral("dummy"))      // 'dummy';
             );
+        }
+
+        [Fact]
+        public void StepIntoNamedFunctionCalls()
+        {
+            var script = @"
+function a( ) { return 2; }
+function b(l) { return l + a(); }
+function c( ) { return b(3) + a(); }
+let res = c();
+";
+
+            var steps = StepIntoScript(script);
+            Assert.Collection(steps,
+                step => Assert.Equal("function c( ) { »return b(3) + a(); }", step),
+                step => Assert.Equal("function b(l) { »return l + a(); }", step),
+                step => Assert.Equal("function a( ) { »return 2; }", step),
+                step => Assert.Equal("function a( ) { return 2; }»", step),
+                step => Assert.Equal("function b(l) { return l + a(); }»", step),
+                step => Assert.Equal("function a( ) { »return 2; }", step),
+                step => Assert.Equal("function a( ) { return 2; }»", step),
+                step => Assert.Equal("function c( ) { return b(3) + a(); }»", step));
+        }
+
+        [Fact]
+        public void StepIntoArrowFunctionCalls()
+        {
+            var script = @"
+const a = ( ) => 2;
+const b = (l) => l + a();
+const c = ( ) => b(3) + a();
+let res = c();
+";
+
+            var steps = StepIntoScript(script);
+            Assert.Collection(steps,
+                step => Assert.Equal("const c = ( ) => »b(3) + a();", step),
+                step => Assert.Equal("const b = (l) => »l + a();", step),
+                step => Assert.Equal("const a = ( ) => »2;", step),
+                step => Assert.Equal("const a = ( ) => 2»;", step),
+                step => Assert.Equal("const b = (l) => l + a()»;", step),
+                step => Assert.Equal("const a = ( ) => »2;", step),
+                step => Assert.Equal("const a = ( ) => 2»;", step),
+                step => Assert.Equal("const c = ( ) => b(3) + a()»;", step));
+        }
+
+        private List<string> StepIntoScript(string script)
+        {
+            var engine = new Engine(options => options
+                .DebugMode()
+                .InitialStepMode(StepMode.Into));
+
+            var stepStatements = new List<string>();
+            var scriptLines = script.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+            engine.Debugger.Step += (DebugHandler sender, ref DebugInformation information) =>
+            {
+                if (information.CurrentNode is not VariableDeclaration && information.CurrentNode is not FunctionDeclaration)
+                    OutputPosition(information.Location);
+                return StepMode.Into;
+            };
+
+            engine.Execute(script);
+            return stepStatements;
+
+            void OutputPosition(in SourceLocation location)
+            {
+                var line = scriptLines[location.Start.Line - 1];
+                var withPositionIndicator = string.Concat(line.Substring(0, location.Start.Column), "»", line.Substring(location.Start.Column));
+                stepStatements.Add(withPositionIndicator.TrimEnd());
+            }
         }
     }
 }

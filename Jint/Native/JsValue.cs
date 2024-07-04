@@ -13,7 +13,7 @@ using Jint.Runtime.Interop;
 
 namespace Jint.Native
 {
-    public abstract class JsValue : IEquatable<JsValue>
+    public abstract partial class JsValue : IEquatable<JsValue>
     {
         public static readonly JsValue Undefined = new JsUndefined();
         public static readonly JsValue Null = new JsNull();
@@ -32,13 +32,15 @@ namespace Jint.Native
         }
 
         [Pure]
-        public virtual bool IsArray() => false;
+        internal virtual bool IsArray() => false;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         internal virtual bool IsIntegerIndexedArray => false;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         internal virtual bool IsConstructor => false;
+
+        internal bool IsEmpty => ReferenceEquals(this, JsEmpty.Instance);
 
         [Pure]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -66,7 +68,11 @@ namespace Jint.Native
         }
 
         [Pure]
-        internal bool TryGetIterator(Realm realm, [NotNullWhen(true)] out IteratorInstance? iterator, GeneratorKind hint = GeneratorKind.Sync, ICallable? method = null)
+        internal virtual bool TryGetIterator(
+            Realm realm,
+            [NotNullWhen(true)] out IteratorInstance? iterator,
+            GeneratorKind hint = GeneratorKind.Sync,
+            ICallable? method = null)
         {
             var obj = TypeConverter.ToObject(realm, this);
 
@@ -111,6 +117,70 @@ namespace Jint.Native
             }
 
             return true;
+        }
+
+        internal static JsValue ConvertAwaitableToPromise(Engine engine, object obj)
+        {
+            if (obj is Task task)
+            {
+                return ConvertTaskToPromise(engine, task);
+            }
+
+#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP
+            if (obj is ValueTask valueTask)
+            {
+                return ConvertTaskToPromise(engine, valueTask.AsTask());
+            }
+
+            // ValueTask<T>
+            var asTask = obj.GetType().GetMethod(nameof(ValueTask<object>.AsTask));
+            if (asTask is not null)
+            {
+                return ConvertTaskToPromise(engine, (Task) asTask.Invoke(obj, parameters: null)!);
+            }
+#endif
+
+            return FromObject(engine, JsValue.Undefined);
+        }
+
+        internal static JsValue ConvertTaskToPromise(Engine engine, Task task)
+        {
+            var (promise, resolve, reject) = engine.RegisterPromise();
+            task = task.ContinueWith(continuationAction =>
+            {
+                if (continuationAction.IsFaulted)
+                {
+                    reject(FromObject(engine, continuationAction.Exception));
+                }
+                else if (continuationAction.IsCanceled)
+                {
+                    reject(FromObject(engine, new ExecutionCanceledException()));
+                }
+                else
+                {
+                    // Special case: Marshal `async Task` as undefined, as this is `Task<VoidTaskResult>` at runtime
+                    // See https://github.com/sebastienros/jint/pull/1567#issuecomment-1681987702
+                    if (Task.CompletedTask.Equals(continuationAction))
+                    {
+                        resolve(FromObject(engine, JsValue.Undefined));
+                        return;
+                    }
+
+                    var result = continuationAction.GetType().GetProperty(nameof(Task<object>.Result));
+                    if (result is not null)
+                    {
+                        resolve(FromObject(engine, result.GetValue(continuationAction)));
+                    }
+                    else
+                    {
+                        resolve(FromObject(engine, JsValue.Undefined));
+                    }
+                }
+            },
+            // Ensure continuation is completed before unwrapping Promise
+            continuationOptions: TaskContinuationOptions.AttachedToParent | TaskContinuationOptions.ExecuteSynchronously);
+
+            return promise;
         }
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
@@ -174,18 +244,6 @@ namespace Jint.Native
         /// Coerces boolean value from <see cref="JsValue"/> instance.
         /// </summary>
         internal virtual bool ToBoolean() => _type > InternalTypes.Null;
-
-        /// <summary>
-        /// Invoke the current value as function.
-        /// </summary>
-        /// <param name="engine">The engine handling the invoke.</param>
-        /// <param name="arguments">The arguments of the function call.</param>
-        /// <returns>The value returned by the function call.</returns>
-        [Obsolete("Should use Engine.Invoke when direct invoking is needed.")]
-        public JsValue Invoke(Engine engine, params JsValue[] arguments)
-        {
-            return engine.Invoke(this, arguments);
-        }
 
         /// <summary>
         /// https://tc39.es/ecma262/#sec-getv
@@ -313,7 +371,7 @@ namespace Jint.Native
         /// <summary>
         /// https://tc39.es/ecma262/#sec-islooselyequal
         /// </summary>
-        public virtual bool IsLooselyEqual(JsValue value)
+        protected internal virtual bool IsLooselyEqual(JsValue value)
         {
             if (ReferenceEquals(this, value))
             {
@@ -345,12 +403,12 @@ namespace Jint.Native
                 return x.IsLooselyEqual(TypeConverter.ToNumber(y));
             }
 
-            if (y.IsObject() && (x._type & InternalTypes.Primitive) != InternalTypes.None)
+            if (y.IsObject() && (x._type & InternalTypes.Primitive) != InternalTypes.Empty)
             {
                 return x.IsLooselyEqual(TypeConverter.ToPrimitive(y));
             }
 
-            if (x.IsObject() && (y._type & InternalTypes.Primitive) != InternalTypes.None)
+            if (x.IsObject() && (y._type & InternalTypes.Primitive) != InternalTypes.Empty)
             {
                 return y.IsLooselyEqual(TypeConverter.ToPrimitive(x));
             }
@@ -377,7 +435,7 @@ namespace Jint.Native
         internal JsValue Clone()
         {
             // concatenated string and arguments currently may require cloning
-            return (_type & InternalTypes.RequiresCloning) == InternalTypes.None
+            return (_type & InternalTypes.RequiresCloning) == InternalTypes.Empty
                 ? this
                 : DoClone();
         }

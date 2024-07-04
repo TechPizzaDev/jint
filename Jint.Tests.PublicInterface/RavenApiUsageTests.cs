@@ -1,4 +1,3 @@
-using Esprima.Ast;
 using Jint.Constraints;
 using Jint.Native;
 using Jint.Native.Function;
@@ -17,26 +16,23 @@ public class RavenApiUsageTests
     {
         var engine = new Engine();
 
-        var properties = new List<Node>
+        var properties = new Node[]
         {
-            new Property(PropertyKind.Init, new Identifier("field"), false,
-                new StaticMemberExpression(new Identifier("self"), new Identifier("field"), optional: false), false, false)
+            new ObjectProperty(PropertyKind.Init, new Identifier("field"),
+                new MemberExpression(new Identifier("self"), new Identifier("field"), computed: false, optional: false), false, false, false)
         };
 
         var functionExp = new FunctionExpression(
             new Identifier("functionId"),
-            NodeList.Create<Node>(new List<Expression> { new Identifier("self") }),
-            new BlockStatement(NodeList.Create(new List<Statement> { new ReturnStatement(new ObjectExpression(NodeList.Create(properties))) })),
+            NodeList.From<Node>(new Identifier("self")),
+            new FunctionBody(NodeList.From<Statement>(new ReturnStatement(new ObjectExpression(NodeList.From(properties)))), strict: false),
             generator: false,
-            strict: false,
             async: false);
 
-        var functionObject = new ScriptFunctionInstance(
+        var functionObject = new ScriptFunction(
             engine,
             functionExp,
-            engine.CreateNewDeclarativeEnvironment(),
-            strict: false
-        );
+            strict: false);
 
         Assert.NotNull(functionObject);
     }
@@ -46,7 +42,7 @@ public class RavenApiUsageTests
     {
         var engine = new Engine(options => options.MaxStatements(123));
 
-        var constraint = engine.FindConstraint<MaxStatementsConstraint>();
+        var constraint = engine.Constraints.Find<MaxStatementsConstraint>();
         Assert.NotNull(constraint);
 
         var oldMaxStatements = constraint.MaxStatements;
@@ -72,12 +68,11 @@ public class RavenApiUsageTests
         var obj = new JsObject(engine);
         obj.FastSetDataProperty("name", "test");
 
-        var array1 = new JsArray(engine, new JsValue[]
-        {
+        var array1 = new JsArray(engine, [
             JsNumber.Create(1),
             JsNumber.Create(2),
             JsNumber.Create(3)
-        });
+        ]);
         engine.SetValue("array1", array1);
 
         TestArrayAccess(engine, array1, "array1");
@@ -89,7 +84,7 @@ public class RavenApiUsageTests
         Assert.Equal(0, engine.Evaluate("emptyArray.length"));
         Assert.Equal(1, engine.Evaluate("emptyArray.push(1); return emptyArray.length"));
 
-        engine.SetValue("emptyArray", new JsArray(engine, Array.Empty<JsValue>()));
+        engine.SetValue("emptyArray", new JsArray(engine, []));
         Assert.Equal(0, engine.Evaluate("emptyArray.length"));
         Assert.Equal(1, engine.Evaluate("emptyArray.push(1); return emptyArray.length"));
 
@@ -103,7 +98,7 @@ public class RavenApiUsageTests
         Assert.Equal(2, array.GetOwnProperty("1").Value);
 
         array.Push(4);
-        array.Push(new JsValue[] { 5, 6 });
+        array.Push([5, 6]);
 
         var i = 0;
         foreach (var entry in array.GetEntries())
@@ -147,6 +142,8 @@ public class RavenApiUsageTests
         var empty = new CustomString("");
         engine.SetValue("empty", empty);
 
+        engine.SetValue("x", new CustomString("x", allowMaterialize: true));
+
         var obj = new JsObject(engine);
         obj.Set("name", new CustomString("the name"));
         engine.SetValue("obj", obj);
@@ -160,7 +157,7 @@ public class RavenApiUsageTests
         Assert.True(engine.Evaluate("array.includes('2')").AsBoolean());
         Assert.True(engine.Evaluate("array.filter(x => x === '2').length > 0").AsBoolean());
 
-        engine.SetValue("objArray", new JsArray(engine, new JsValue[] { obj, obj }));
+        engine.SetValue("objArray", new JsArray(engine, [obj, obj]));
         Assert.True(engine.Evaluate("objArray.filter(x => x.name === 'the name').length === 2").AsBoolean());
 
         Assert.Equal(9, engine.Evaluate("str.length"));
@@ -177,6 +174,9 @@ public class RavenApiUsageTests
         Assert.True(engine.Evaluate("empty.trim() === ''").AsBoolean());
         Assert.True(engine.Evaluate("empty.trimStart() === ''").AsBoolean());
         Assert.True(engine.Evaluate("empty.trimEnd() === ''").AsBoolean());
+
+        Assert.True(engine.Evaluate("str[1] === 'h'").AsBoolean());
+        Assert.True(engine.Evaluate("str[x] === undefined").AsBoolean());
     }
 
     [Fact]
@@ -194,21 +194,35 @@ public class RavenApiUsageTests
         engine.SetValue("value", new CustomUndefined());
         Assert.Equal("foo", engine.Evaluate("value ? value + 'bar' : 'foo'"));
     }
+
+    [Fact]
+    public void CanResetCallStack()
+    {
+        var engine = new Engine();
+        engine.Advanced.ResetCallStack();
+    }
 }
 
 file sealed class CustomString : JsString
 {
     private readonly string _value;
+    private readonly bool _allowMaterialize;
 
-    public CustomString(string value) : base(null)
+    public CustomString(string value, bool allowMaterialize = false) : base(null)
     {
         _value = value;
+        _allowMaterialize = allowMaterialize;
     }
 
     public override string ToString()
     {
-        // when called we know that we couldn't use fast paths
-        throw new InvalidOperationException("I don't want to be materialized!");
+        if (!_allowMaterialize)
+        {
+            // when called we know that we couldn't use fast paths
+            throw new InvalidOperationException("I don't want to be materialized!");
+        }
+
+        return _value;
     }
 
     public override char this[int index] => _value[index];
@@ -224,7 +238,7 @@ file sealed class CustomString : JsString
         };
     }
 
-    public override bool IsLooselyEqual(JsValue value)
+    protected override bool IsLooselyEqual(JsValue value)
     {
         return value switch
         {

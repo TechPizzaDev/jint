@@ -4,7 +4,7 @@ using Jint.Runtime.Descriptors;
 
 namespace Jint.Native.String;
 
-internal class StringInstance : ObjectInstance, IPrimitiveInstance
+internal class StringInstance : ObjectInstance, IJsPrimitive
 {
     internal PropertyDescriptor? _length;
 
@@ -15,9 +15,9 @@ internal class StringInstance : ObjectInstance, IPrimitiveInstance
         _length = PropertyDescriptor.AllForbiddenDescriptor.ForNumber(value.Length);
     }
 
-    Types IPrimitiveInstance.Type => Types.String;
+    Types IJsPrimitive.Type => Types.String;
 
-    JsValue IPrimitiveInstance.PrimitiveValue => StringData;
+    JsValue IJsPrimitive.PrimitiveValue => StringData;
 
     public JsString StringData { get; }
 
@@ -51,7 +51,7 @@ internal class StringInstance : ObjectInstance, IPrimitiveInstance
             return desc;
         }
 
-        if ((property._type & (InternalTypes.Number | InternalTypes.Integer | InternalTypes.String)) == InternalTypes.None)
+        if ((property._type & (InternalTypes.Number | InternalTypes.Integer | InternalTypes.String)) == InternalTypes.Empty)
         {
             return PropertyDescriptor.Undefined;
         }
@@ -87,7 +87,7 @@ internal class StringInstance : ObjectInstance, IPrimitiveInstance
     public sealed override List<JsValue> GetOwnPropertyKeys(Types types = Types.String | Types.Symbol)
     {
         var keys = new List<JsValue>(StringData.Length + 1);
-        if ((types & Types.String) != Types.None)
+        if ((types & Types.String) != Types.Empty)
         {
             for (uint i = 0; i < StringData.Length; ++i)
             {
@@ -97,7 +97,7 @@ internal class StringInstance : ObjectInstance, IPrimitiveInstance
             keys.AddRange(base.GetOwnPropertyKeys(Types.String));
         }
 
-        if ((types & Types.Symbol) != Types.None)
+        if ((types & Types.Symbol) != Types.Empty)
         {
             keys.AddRange(base.GetOwnPropertyKeys(Types.Symbol));
         }

@@ -4,6 +4,9 @@ using System.Reflection;
 using System.Threading;
 using Jint.Extensions;
 
+#pragma warning disable IL2067
+#pragma warning disable IL2070
+
 namespace Jint.Runtime.Interop.Reflection
 {
     /// <summary>
@@ -33,8 +36,7 @@ namespace Jint.Runtime.Interop.Reflection
 
             Type GetTypeDefinition(Type type)
             {
-                return type.IsConstructedGenericType && type.GenericTypeArguments.Any(x => x.IsGenericParameter) ?
-                    type.GetGenericTypeDefinition() : type;
+                return type.IsConstructedGenericType && type.GenericTypeArguments.Any(x => x.IsGenericParameter) ? type.GetGenericTypeDefinition() : type;
             }
 
             var methodsByTarget = extensionMethodContainerTypes
@@ -47,8 +49,14 @@ namespace Jint.Runtime.Interop.Reflection
 
         public bool HasMethods => _allExtensionMethods.Count > 0;
 
-        public bool TryGetExtensionMethods(Type objectType, [NotNullWhen((true))] out MethodInfo[]? methods)
+        public bool TryGetExtensionMethods(Type objectType, [NotNullWhen(true)] out MethodInfo[]? methods)
         {
+            if (_allExtensionMethods.Count == 0)
+            {
+                methods = Array.Empty<MethodInfo>();
+                return false;
+            }
+
             var methodLookup = _extensionMethods;
 
             if (methodLookup.TryGetValue(objectType, out methods))
@@ -70,14 +78,11 @@ namespace Jint.Runtime.Interop.Reflection
                 }
             }
 
-			// don't create generic methods bound to an array of object - as this will prevent value types and other generics that don't support covariants/contravariants
+            // don't create generic methods bound to an array of object - as this will prevent value types and other generics that don't support covariants/contravariants
             methods = results.ToArray();
 
             // racy, we don't care, worst case we'll catch up later
-            Interlocked.CompareExchange(ref _extensionMethods, new Dictionary<Type, MethodInfo[]>(methodLookup)
-            {
-                [objectType] = methods
-            }, methodLookup);
+            Interlocked.CompareExchange(ref _extensionMethods, new Dictionary<Type, MethodInfo[]>(methodLookup) { [objectType] = methods }, methodLookup);
 
             return methods.Length > 0;
         }

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using Jint.Native;
@@ -8,38 +9,127 @@ using Jint.Native.Symbol;
 using Jint.Runtime.Descriptors;
 using Jint.Runtime.Interop.Reflection;
 
+#pragma warning disable IL2067
+#pragma warning disable IL2072
+#pragma warning disable IL2075
+
 namespace Jint.Runtime.Interop
 {
     /// <summary>
     /// Wraps a CLR instance
     /// </summary>
-    public sealed class ObjectWrapper : ObjectInstance, IObjectWrapper, IEquatable<ObjectWrapper>
+    public class ObjectWrapper : ObjectInstance, IObjectWrapper, IEquatable<ObjectWrapper>
     {
-        private readonly TypeDescriptor _typeDescriptor;
+        internal readonly TypeDescriptor _typeDescriptor;
 
-        public ObjectWrapper(Engine engine, object obj, Type? type = null)
+        internal ObjectWrapper(
+            Engine engine,
+            object obj,
+            Type? type = null)
             : base(engine)
         {
             Target = obj;
             ClrType = GetClrType(obj, type);
             _typeDescriptor = TypeDescriptor.Get(ClrType);
+
             if (_typeDescriptor.LengthProperty is not null)
             {
                 // create a forwarder to produce length from Count or Length if one of them is present
-                var functionInstance = new ClrFunctionInstance(engine, "length", GetLength);
+                var functionInstance = new ClrFunction(engine, "length", GetLength);
                 var descriptor = new GetSetPropertyDescriptor(functionInstance, Undefined, PropertyFlag.Configurable);
                 SetProperty(KnownKeys.Length, descriptor);
+
+                if (_typeDescriptor.IsArrayLike && engine.Options.Interop.AttachArrayPrototype)
+                {
+                    // if we have array-like object, we can attach array prototype
+                    _prototype = engine.Intrinsics.Array.PrototypeObject;
+                }
             }
+        }
+
+        /// <summary>
+        /// Creates a new object wrapper for given object instance and exposed type.
+        /// </summary>
+        public static ObjectInstance Create(Engine engine, object target, Type? type = null)
+        {
+            if (target == null)
+            {
+                ExceptionHelper.ThrowArgumentNullException(nameof(target));
+            }
+
+            // STJ integration
+            if (string.Equals(type?.FullName, "System.Text.Json.Nodes.JsonNode", StringComparison.Ordinal))
+            {
+                // we need to always expose the actual type instead of the type nodes provide
+                type = target.GetType();
+            }
+
+            type ??= target.GetType();
+
+            if (TryBuildArrayLikeWrapper(engine, target, type, out var wrapper))
+            {
+                return wrapper;
+            }
+
+            return new ObjectWrapper(engine, target, type);
+        }
+
+        private static bool TryBuildArrayLikeWrapper(
+            Engine engine,
+            object target,
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type,
+            [NotNullWhen(true)] out ArrayLikeWrapper? result)
+        {
+#pragma warning disable IL2055
+#pragma warning disable IL3050
+
+            result = null;
+
+            // check for generic interfaces
+            foreach (var i in type.GetInterfaces())
+            {
+                if (!i.IsGenericType)
+                {
+                    continue;
+                }
+
+                var arrayItemType = i.GenericTypeArguments[0];
+
+                if (i.GetGenericTypeDefinition() == typeof(IList<>))
+                {
+                    var arrayWrapperType = typeof(GenericListWrapper<>).MakeGenericType(arrayItemType);
+                    result = (ArrayLikeWrapper) Activator.CreateInstance(arrayWrapperType, engine, target, type)!;
+                    break;
+                }
+
+                if (i.GetGenericTypeDefinition() == typeof(IReadOnlyList<>))
+                {
+                    var arrayWrapperType = typeof(ReadOnlyListWrapper<>).MakeGenericType(arrayItemType);
+                    result = (ArrayLikeWrapper) Activator.CreateInstance(arrayWrapperType, engine, target, type)!;
+                    break;
+                }
+            }
+
+#pragma warning restore IL3050
+#pragma warning restore IL2055
+
+            // least specific
+            if (result is null && target is IList list)
+            {
+                result = new ListWrapper(engine, list, type);
+            }
+
+            return result is not null;
         }
 
         public object Target { get; }
         internal Type ClrType { get; }
 
-        public override bool IsArrayLike => _typeDescriptor.IsArrayLike;
+        internal override bool IsArrayLike => _typeDescriptor.IsArrayLike;
 
         internal override bool HasOriginalIterator => IsArrayLike;
 
-        internal override bool IsIntegerIndexedArray => _typeDescriptor.IsIntegerIndexedArray;
+        internal override bool IsIntegerIndexedArray => _typeDescriptor.IsIntegerIndexed;
 
         public override bool Set(JsValue property, JsValue value, JsValue receiver)
         {
@@ -65,7 +155,7 @@ namespace Jint.Runtime.Interop
                         return false;
                     }
 
-                    accessor.SetValue(_engine, Target, value);
+                    accessor.SetValue(_engine, Target, member, value);
                     return true;
                 }
             }
@@ -95,25 +185,23 @@ namespace Jint.Runtime.Interop
             return true;
         }
 
-        public override object ToObject()
-        {
-            return Target;
-        }
+        public override object ToObject() => Target;
 
         public override void RemoveOwnProperty(JsValue property)
         {
-            if (_engine.Options.Interop.AllowWrite && property is JsString jsString)
+            if (_engine.Options.Interop.AllowWrite && property is JsString jsString && _typeDescriptor.RemoveMethod is not null)
             {
-                _typeDescriptor.Remove(Target, jsString.ToString());
+                _typeDescriptor.RemoveMethod.Invoke(Target, [jsString.ToString()]);
             }
         }
 
         public override JsValue Get(JsValue property, JsValue receiver)
         {
-            if (property.IsInteger() && Target is IList list)
+            if (!_typeDescriptor.IsDictionary
+                && Target is ICollection c
+                && CommonProperties.Length.Equals(property))
             {
-                var index = (int) ((JsNumber) property)._value;
-                return (uint) index < list.Count ? FromObject(_engine, list[index]) : Undefined;
+                return JsNumber.Create(c.Count);
             }
 
             var desc = GetOwnProperty(property, mustBeReadable: true, mustBeWritable: false);
@@ -125,7 +213,7 @@ namespace Jint.Runtime.Interop
             return Prototype?.Get(property, receiver) ?? Undefined;
         }
 
-        public override List<JsValue> GetOwnPropertyKeys(Types types = Types.None | Types.String | Types.Symbol)
+        public override List<JsValue> GetOwnPropertyKeys(Types types = Types.Empty | Types.String | Types.Symbol)
         {
             return new List<JsValue>(EnumerateOwnPropertyKeys(types));
         }
@@ -141,10 +229,10 @@ namespace Jint.Runtime.Interop
         private IEnumerable<JsValue> EnumerateOwnPropertyKeys(Types types)
         {
             // prefer object order, add possible other properties after
-            var includeStrings = (types & Types.String) != Types.None;
+            var includeStrings = (types & Types.String) != Types.Empty;
             if (includeStrings && _typeDescriptor.IsStringKeyedGenericDictionary) // expando object for instance
             {
-                var keys = _typeDescriptor.GetKeys(Target);
+                var keys = (ICollection<string>) _typeDescriptor.KeysAccessor!.GetValue(Target)!;
                 foreach (var key in keys)
                 {
                     var jsString = JsString.Create(key);
@@ -158,7 +246,7 @@ namespace Jint.Runtime.Interop
                 {
                     object? stringKey = key as string;
                     if (stringKey is not null
-                        || _engine.ClrTypeConverter.TryConvert(key, typeof(string), CultureInfo.InvariantCulture, out stringKey))
+                        || _engine.TypeConverter.TryConvert(key, typeof(string), CultureInfo.InvariantCulture, out stringKey))
                     {
                         var jsString = JsString.Create((string) stringKey!);
                         yield return jsString;
@@ -168,8 +256,7 @@ namespace Jint.Runtime.Interop
             else if (includeStrings)
             {
                 // we take public properties and fields
-                var type = ClrType;
-                foreach (var p in type.GetProperties(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public))
+                foreach (var p in ClrType.GetProperties(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public))
                 {
                     var indexParameters = p.GetIndexParameters();
                     if (indexParameters.Length == 0)
@@ -179,7 +266,7 @@ namespace Jint.Runtime.Interop
                     }
                 }
 
-                foreach (var f in type.GetFields(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public))
+                foreach (var f in ClrType.GetFields(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public))
                 {
                     var jsString = JsString.Create(f.Name);
                     yield return jsString;
@@ -205,7 +292,7 @@ namespace Jint.Runtime.Interop
             {
                 if (property == GlobalSymbolRegistry.Iterator && _typeDescriptor.Iterable)
                 {
-                    var iteratorFunction = new ClrFunctionInstance(
+                    var iteratorFunction = new ClrFunction(
                         Engine,
                         "iterator",
                         Iterator,
@@ -247,7 +334,7 @@ namespace Jint.Runtime.Interop
             }
 
             var accessor = _engine.Options.Interop.TypeResolver.GetAccessor(_engine, ClrType, member, mustBeReadable, mustBeWritable);
-            var descriptor = accessor.CreatePropertyDescriptor(_engine, Target, enumerable: !isDictionary);
+            var descriptor = accessor.CreatePropertyDescriptor(_engine, Target, member, enumerable: !isDictionary);
             if (!isDictionary
                 && !ReferenceEquals(descriptor, PropertyDescriptor.Undefined)
                 && (!mustBeReadable || accessor.Readable)
@@ -268,15 +355,15 @@ namespace Jint.Runtime.Interop
             {
                 return member switch
                 {
-                    PropertyInfo pi => new PropertyAccessor(pi.Name, pi),
-                    MethodBase mb => new MethodAccessor(target.GetType(), member.Name, MethodDescriptor.Build(new[] { mb })),
+                    PropertyInfo pi => new PropertyAccessor(pi),
+                    MethodBase mb => new MethodAccessor(target.GetType(), MethodDescriptor.Build(new[] { mb })),
                     FieldInfo fi => new FieldAccessor(fi),
                     _ => null
                 };
             }
 
             var accessor = engine.Options.Interop.TypeResolver.GetAccessor(engine, target.GetType(), member.Name, mustBeReadable: false, mustBeWritable: false, Factory);
-            return accessor.CreatePropertyDescriptor(engine, target);
+            return accessor.CreatePropertyDescriptor(engine, target, member.Name);
         }
 
         internal static Type GetClrType(object obj, Type? type)
@@ -285,18 +372,14 @@ namespace Jint.Runtime.Interop
             {
                 return obj.GetType();
             }
-            else
+
+            var underlyingType = Nullable.GetUnderlyingType(type);
+            if (underlyingType is not null)
             {
-                var underlyingType = Nullable.GetUnderlyingType(type);
-                if (underlyingType is not null)
-                {
-                    return underlyingType;
-                }
-                else
-                {
-                    return type;
-                }
+                return underlyingType;
             }
+
+            return type;
         }
 
         private static JsValue Iterator(JsValue thisObject, JsValue[] arguments)

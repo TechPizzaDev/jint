@@ -1,5 +1,4 @@
-﻿using Esprima;
-using Jint.Native;
+﻿using Jint.Native;
 using Jint.Runtime;
 using Jint.Runtime.Debugger;
 
@@ -22,7 +21,7 @@ namespace Jint.Tests.Runtime.Debugger
 
             TestHelpers.TestAtBreak(script, (engine, info) =>
             {
-                var evaluated = engine.DebugHandler.Evaluate("x");
+                var evaluated = engine.Debugger.Evaluate("x");
                 Assert.IsType<JsNumber>(evaluated);
                 Assert.Equal(50, evaluated.AsNumber());
             });
@@ -32,7 +31,7 @@ namespace Jint.Tests.Runtime.Debugger
         public void ThrowsIfNoCurrentContext()
         {
             var engine = new Engine(options => options.DebugMode());
-            var exception = Assert.Throws<DebugEvaluationException>(() => engine.DebugHandler.Evaluate("let x = 1;"));
+            var exception = Assert.Throws<DebugEvaluationException>(() => engine.Debugger.Evaluate("let x = 1;"));
             Assert.Null(exception.InnerException); // Not a JavaScript or parser exception
         }
 
@@ -51,7 +50,7 @@ namespace Jint.Tests.Runtime.Debugger
 
             TestHelpers.TestAtBreak(script, (engine, info) =>
             {
-                var exception = Assert.Throws<DebugEvaluationException>(() => engine.DebugHandler.Evaluate("y"));
+                var exception = Assert.Throws<DebugEvaluationException>(() => engine.Debugger.Evaluate("y"));
                 Assert.IsType<JavaScriptException>(exception.InnerException);
             });
         }
@@ -72,8 +71,8 @@ namespace Jint.Tests.Runtime.Debugger
             TestHelpers.TestAtBreak(script, (engine, info) =>
             {
                 var exception = Assert.Throws<DebugEvaluationException>(() =>
-                    engine.DebugHandler.Evaluate("this is a syntax error"));
-                Assert.IsType<ParserException>(exception.InnerException);
+                    engine.Debugger.Evaluate("this is a syntax error"));
+                Assert.IsType<SyntaxErrorException>(exception.InnerException);
             });
         }
 
@@ -100,7 +99,7 @@ namespace Jint.Tests.Runtime.Debugger
                 Assert.Equal(1, engine.CallStack.Count);
                 var frameBefore = engine.CallStack.Stack[0];
 
-                Assert.Throws<DebugEvaluationException>(() => engine.DebugHandler.Evaluate("throws()"));
+                Assert.Throws<DebugEvaluationException>(() => engine.Debugger.Evaluate("throws()"));
                 Assert.Equal(1, engine.CallStack.Count);
                 var frameAfter = engine.CallStack.Stack[0];
                 // Stack frames and some of their properties are structs - can't check reference equality

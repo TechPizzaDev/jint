@@ -5,6 +5,11 @@ using System.Reflection;
 using System.Threading;
 using Jint.Runtime.Interop.Reflection;
 
+#pragma warning disable IL2067
+#pragma warning disable IL2070
+#pragma warning disable IL2072
+#pragma warning disable IL2075
+
 namespace Jint.Runtime.Interop
 {
     /// <summary>
@@ -16,13 +21,35 @@ namespace Jint.Runtime.Interop
 
         /// <summary>
         /// Registers a filter that determines whether given member is wrapped to interop or returned as undefined.
-        /// By default allows all but will also be limited by <see cref="InteropOptions.AllowGetType"/> configuration.
+        /// By default allows all but will also be limited by <see cref="Options.InteropOptions.AllowGetType"/> configuration.
         /// </summary>
-        /// <seealso cref="InteropOptions.AllowGetType"/>
-        public Predicate<MemberInfo> MemberFilter { get; set; } = _ => true;
+        /// <seealso cref="Options.InteropOptions.AllowGetType"/>
+        public Predicate<MemberInfo> MemberFilter { get; set; } = static _ => true;
 
-        internal bool Filter(Engine engine, MemberInfo m)
+        internal bool Filter(Engine engine, Type targetType, MemberInfo m)
         {
+            // some specific problematic indexer cases for JSON interop
+            if (string.Equals(m.Name, "Item", StringComparison.Ordinal) && m is PropertyInfo p)
+            {
+                var indexParameters = p.GetIndexParameters();
+                if (indexParameters.Length == 1)
+                {
+                    var parameter = indexParameters[0];
+                    if (string.Equals(m.DeclaringType?.FullName, "System.Text.Json.Nodes.JsonNode", StringComparison.Ordinal))
+                    {
+                        // STJ
+                        return parameter.ParameterType == typeof(string) && string.Equals(targetType.FullName, "System.Text.Json.Nodes.JsonObject", StringComparison.Ordinal)
+                               || parameter.ParameterType == typeof(int) && string.Equals(targetType.FullName, "System.Text.Json.Nodes.JsonArray", StringComparison.Ordinal);
+                    }
+
+                    if (string.Equals(targetType.FullName, "Newtonsoft.Json.Linq.JArray", StringComparison.Ordinal))
+                    {
+                        // NJ
+                        return parameter.ParameterType == typeof(int);
+                    }
+                }
+            }
+
             return (engine.Options.Interop.AllowGetType || !string.Equals(m.Name, nameof(GetType), StringComparison.Ordinal)) && MemberFilter(m);
         }
 
@@ -45,7 +72,7 @@ namespace Jint.Runtime.Interop
 
         internal ReflectionAccessor GetAccessor(
             Engine engine,
-            Type type,
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.Interfaces)] Type type,
             string member,
             bool mustBeReadable,
             bool mustBeWritable,
@@ -61,6 +88,12 @@ namespace Jint.Runtime.Interop
 
             accessor = accessorFactory?.Invoke() ?? ResolvePropertyDescriptorFactory(engine, type, member, mustBeReadable, mustBeWritable);
 
+            // don't cache if numeric indexer
+            if (uint.TryParse(member, out _))
+            {
+                return accessor;
+            }
+
             // racy, we don't care, worst case we'll catch up later
             Interlocked.CompareExchange(ref engine._reflectionAccessors,
                 new Dictionary<Engine.ClrPropertyDescriptorFactoriesKey, ReflectionAccessor>(factories)
@@ -73,7 +106,7 @@ namespace Jint.Runtime.Interop
 
         private ReflectionAccessor ResolvePropertyDescriptorFactory(
             Engine engine,
-            Type type,
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.Interfaces)] Type type,
             string memberName,
             bool mustBeReadable,
             bool mustBeWritable)
@@ -96,7 +129,7 @@ namespace Jint.Runtime.Interop
 
             if (typeof(DynamicObject).IsAssignableFrom(type))
             {
-                return new DynamicObjectAccessor(type, memberName);
+                return new DynamicObjectAccessor(type);
             }
 
             var typeResolverMemberNameComparer = MemberNameComparer;
@@ -110,7 +143,7 @@ namespace Jint.Runtime.Interop
                 {
                     foreach (var iprop in iface.GetProperties())
                     {
-                        if (!Filter(engine, iprop))
+                        if (!Filter(engine, type, iprop))
                         {
                             continue;
                         }
@@ -134,7 +167,7 @@ namespace Jint.Runtime.Interop
 
                 if (list?.Count == 1)
                 {
-                    return new PropertyAccessor(memberName, list[0]);
+                    return new PropertyAccessor(list[0]);
                 }
 
                 // try to find explicit method implementations
@@ -143,7 +176,7 @@ namespace Jint.Runtime.Interop
                 {
                     foreach (var imethod in iface.GetMethods())
                     {
-                        if (!Filter(engine, imethod))
+                        if (!Filter(engine, type, imethod))
                         {
                             continue;
                         }
@@ -161,7 +194,7 @@ namespace Jint.Runtime.Interop
 
                 if (explicitMethods?.Count > 0)
                 {
-                    return new MethodAccessor(type, memberName, MethodDescriptor.Build(explicitMethods));
+                    return new MethodAccessor(type, MethodDescriptor.Build(explicitMethods));
                 }
             }
 
@@ -169,7 +202,7 @@ namespace Jint.Runtime.Interop
             var score = int.MaxValue;
             if (indexerAccessor != null)
             {
-                var parameter = indexerAccessor._indexer.GetIndexParameters()[0];
+                var parameter = indexerAccessor.FirstIndexParameter;
                 score = CalculateIndexerScore(parameter, isInteger);
             }
 
@@ -180,7 +213,13 @@ namespace Jint.Runtime.Interop
                 {
                     if (IndexerAccessor.TryFindIndexer(engine, interfaceType, memberName, out var accessor, out _))
                     {
-                        var parameter = accessor._indexer.GetIndexParameters()[0];
+                        // ensure that original type is allowed against indexer
+                        if (!Filter(engine, type, accessor.Indexer))
+                        {
+                            continue;
+                        }
+
+                        var parameter = accessor.FirstIndexParameter;
                         var newScore = CalculateIndexerScore(parameter, isInteger);
                         if (newScore < score)
                         {
@@ -203,7 +242,7 @@ namespace Jint.Runtime.Interop
                 var matches = new List<MethodInfo>();
                 foreach (var method in extensionMethods)
                 {
-                    if (!Filter(engine, method))
+                    if (!Filter(engine, type, method))
                     {
                         continue;
                     }
@@ -219,8 +258,13 @@ namespace Jint.Runtime.Interop
 
                 if (matches.Count > 0)
                 {
-                    return new MethodAccessor(type, memberName, MethodDescriptor.Build(matches));
+                    return new MethodAccessor(type, MethodDescriptor.Build(matches));
                 }
+            }
+
+            if (engine.Options.Interop.ThrowOnUnresolvedMember)
+            {
+                throw new MissingMemberException($"Cannot access property '{memberName}' on type '{type.FullName}");
             }
 
             return ConstantValueAccessor.NullAccessor;
@@ -245,7 +289,7 @@ namespace Jint.Runtime.Interop
 
         internal bool TryFindMemberAccessor(
             Engine engine,
-            Type type,
+            [DynamicallyAccessedMembers(InteropHelper.DefaultDynamicallyAccessedMemberTypes | DynamicallyAccessedMemberTypes.Interfaces)] Type type,
             string memberName,
             BindingFlags bindingFlags,
             PropertyInfo? indexerToTry,
@@ -256,17 +300,17 @@ namespace Jint.Runtime.Interop
             var memberNameComparer = MemberNameComparer;
             var typeResolverMemberNameCreator = MemberNameCreator;
 
-            PropertyInfo? GetProperty(Type t)
+            PropertyInfo? GetProperty([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type t)
             {
                 foreach (var p in t.GetProperties(bindingFlags))
                 {
-                    if (!Filter(engine, p))
+                    if (!Filter(engine, type, p))
                     {
                         continue;
                     }
 
                     // only if it's not an indexer, we can do case-ignoring matches
-                    var isStandardIndexer = p.GetIndexParameters().Length == 1 && string.Equals(p.Name, "Item", StringComparison.Ordinal);
+                    var isStandardIndexer = string.Equals(p.Name, "Item", StringComparison.Ordinal) && p.GetIndexParameters().Length == 1;
                     if (!isStandardIndexer)
                     {
                         foreach (var name in typeResolverMemberNameCreator(p))
@@ -300,7 +344,7 @@ namespace Jint.Runtime.Interop
 
             if (property is not null)
             {
-                accessor = new PropertyAccessor(memberName, property, indexerToTry);
+                accessor = new PropertyAccessor(property, indexerToTry);
                 return true;
             }
 
@@ -308,7 +352,7 @@ namespace Jint.Runtime.Interop
             FieldInfo? field = null;
             foreach (var f in type.GetFields(bindingFlags))
             {
-                if (!Filter(engine, f))
+                if (!Filter(engine, type, f))
                 {
                     continue;
                 }
@@ -325,7 +369,7 @@ namespace Jint.Runtime.Interop
 
             if (field is not null)
             {
-                accessor = new FieldAccessor(field, memberName, indexerToTry);
+                accessor = new FieldAccessor(field, indexerToTry);
                 return true;
             }
 
@@ -333,7 +377,7 @@ namespace Jint.Runtime.Interop
             List<MethodInfo>? methods = null;
             void AddMethod(MethodInfo m)
             {
-                if (!Filter(engine, m))
+                if (!Filter(engine, type, m))
                 {
                     return;
                 }
@@ -381,7 +425,7 @@ namespace Jint.Runtime.Interop
 
             if (methods?.Count > 0)
             {
-                accessor = new MethodAccessor(type, memberName, MethodDescriptor.Build(methods));
+                accessor = new MethodAccessor(type, MethodDescriptor.Build(methods));
                 return true;
             }
 
@@ -390,7 +434,7 @@ namespace Jint.Runtime.Interop
             if (nestedType != null)
             {
                 var typeReference = TypeReference.CreateTypeReference(engine, nestedType);
-                accessor = new NestedTypeAccessor(typeReference, memberName);
+                accessor = new NestedTypeAccessor(typeReference);
                 return true;
             }
 

@@ -23,7 +23,7 @@ namespace Jint.Tests.Runtime.Debugger
 
             bool didPropertyAccess = false;
 
-            engine.DebugHandler.Step += (DebugHandler sender, ref DebugInformation info) =>
+            engine.Debugger.Step += (DebugHandler sender, ref DebugInformation info) =>
             {
                 // We should never reach "fail", because the only way it's executed is from
                 // within this Step handler
@@ -34,7 +34,7 @@ namespace Jint.Tests.Runtime.Debugger
                     var obj = info.CurrentScopeChain[0].GetBindingValue((Key) "obj") as ObjectInstance;
                     var prop = obj.GetOwnProperty("name");
                     // This is where reentrance would occur:
-                    var value = prop.Get.Invoke(engine);
+                    var value = engine.Invoke(prop.Get);
                     didPropertyAccess = true;
                 }
                 return StepMode.Into;

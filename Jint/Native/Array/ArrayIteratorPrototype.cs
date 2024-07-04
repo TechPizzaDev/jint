@@ -1,4 +1,5 @@
 using Jint.Collections;
+using Jint.Native.ArrayBuffer;
 using Jint.Native.Iterator;
 using Jint.Native.Object;
 using Jint.Native.Symbol;
@@ -14,6 +15,8 @@ namespace Jint.Native.Array;
 /// </summary>
 internal sealed class ArrayIteratorPrototype : IteratorPrototype
 {
+    private ClrFunction? _originalNextFunction;
+
     internal ArrayIteratorPrototype(
         Engine engine,
         Realm realm,
@@ -23,9 +26,10 @@ internal sealed class ArrayIteratorPrototype : IteratorPrototype
 
     protected override void Initialize()
     {
+        _originalNextFunction = new ClrFunction(Engine, "next", Next, 0, PropertyFlag.Configurable);
         var properties = new PropertyDictionary(1, checkExistingKeys: false)
         {
-            [KnownKeys.Next] = new(new ClrFunctionInstance(Engine, "next", Next, 0, PropertyFlag.Configurable), true, false, true)
+            [KnownKeys.Next] = new(_originalNextFunction, PropertyFlag.NonEnumerable)
         };
         SetProperties(properties);
 
@@ -38,12 +42,20 @@ internal sealed class ArrayIteratorPrototype : IteratorPrototype
 
     internal IteratorInstance Construct(ObjectInstance array, ArrayIteratorType kind)
     {
+        if (!HasOriginalNext)
+        {
+            return new IteratorInstance.ObjectIterator(this);
+        }
+
         IteratorInstance instance = array is JsArray jsArray
             ? new ArrayIterator(Engine, jsArray, kind)  { _prototype = this }
             : new ArrayLikeIterator(Engine, array, kind) { _prototype = this };
 
         return instance;
     }
+
+    internal bool HasOriginalNext
+        => ReferenceEquals(Get(CommonProperties.Next), _originalNextFunction);
 
     private sealed class ArrayIterator : IteratorInstance
     {
@@ -61,7 +73,7 @@ internal sealed class ArrayIteratorPrototype : IteratorPrototype
 
         public override bool TryIteratorStep(out ObjectInstance nextItem)
         {
-            var len = _array.Length;
+            var len = _array.GetLength();
             var position = _position;
             if (!_closed && position < len)
             {
@@ -97,7 +109,7 @@ internal sealed class ArrayIteratorPrototype : IteratorPrototype
             _typedArray = objectInstance as JsTypedArray;
             if (_typedArray is null)
             {
-                _operations = ArrayOperations.For(objectInstance);
+                _operations = ArrayOperations.For(objectInstance, forWrite: false);
             }
 
             _position = 0;
@@ -109,7 +121,12 @@ internal sealed class ArrayIteratorPrototype : IteratorPrototype
             if (_typedArray is not null)
             {
                 _typedArray._viewedArrayBuffer.AssertNotDetached();
-                len = _typedArray.Length;
+                var taRecord = IntrinsicTypedArrayPrototype.MakeTypedArrayWithBufferWitnessRecord(_typedArray, ArrayBufferOrder.SeqCst);
+                if (!_closed && taRecord.IsTypedArrayOutOfBounds)
+                {
+                    ExceptionHelper.ThrowTypeError(_typedArray.Engine.Realm, "TypedArray is out of bounds");
+                }
+                len = taRecord.TypedArrayLength;
             }
             else
             {

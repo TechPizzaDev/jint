@@ -9,6 +9,13 @@ using Jint.Native;
 using Jint.Native.Function;
 using Jint.Native.Object;
 using Jint.Runtime.Descriptors;
+using Expression = System.Linq.Expressions.Expression;
+
+#pragma warning disable IL2026
+#pragma warning disable IL2067
+#pragma warning disable IL2070
+#pragma warning disable IL2072
+#pragma warning disable IL3050
 
 namespace Jint.Runtime.Interop
 {
@@ -37,7 +44,10 @@ namespace Jint.Runtime.Interop
             _engine = engine;
         }
 
-        public virtual object? Convert(object? value, Type type, IFormatProvider formatProvider)
+        public virtual object? Convert(
+            object? value,
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicFields)] Type type,
+            IFormatProvider formatProvider)
         {
             if (!TryConvert(value, type, formatProvider, propagateException: true, out var converted, out var problemMessage))
             {
@@ -46,19 +56,29 @@ namespace Jint.Runtime.Interop
             return converted;
         }
 
-        public virtual bool TryConvert(object? value, Type type, IFormatProvider formatProvider, [NotNullWhen(true)] out object? converted)
+        public virtual bool TryConvert(
+            object? value,
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicFields)] Type type,
+            IFormatProvider formatProvider,
+            [NotNullWhen(true)] out object? converted)
         {
             return TryConvert(value, type, formatProvider, propagateException: false, out converted, out _);
         }
 
-        private bool TryConvert(object? value, Type type, IFormatProvider formatProvider, bool propagateException, out object? converted, out string? problemMessage)
+        private bool TryConvert(
+            object? value,
+            [DynamicallyAccessedMembers(InteropHelper.DefaultDynamicallyAccessedMemberTypes)] Type type,
+            IFormatProvider formatProvider,
+            bool propagateException,
+            out object? converted,
+            out string? problemMessage)
         {
             converted = null;
             problemMessage = null;
 
             if (value is null)
             {
-                if (TypeConverter.TypeIsNullable(type))
+                if (InteropHelper.TypeIsNullable(type))
                 {
                     return true;
                 }
@@ -76,7 +96,7 @@ namespace Jint.Runtime.Interop
 
             if (type.IsGenericType)
             {
-                var result = TypeConverter.IsAssignableToGenericType(value.GetType(), type);
+                var result = InteropHelper.IsAssignableToGenericType(value.GetType(), type);
                 if (result.IsAssignable)
                 {
                     converted = value;
@@ -112,7 +132,7 @@ namespace Jint.Runtime.Interop
                     var delegatePropertyKey = "__jint_delegate_" + type.GUID;
 
                     var func = (Func<JsValue, JsValue[], JsValue>) value;
-                    var functionInstance = func.Target as FunctionInstance;
+                    var functionInstance = func.Target as Function;
 
                     var d = functionInstance?.GetHiddenClrObjectProperty(delegatePropertyKey) as Delegate;
 
@@ -209,8 +229,8 @@ namespace Jint.Runtime.Interop
                         continue;
                     }
 
-                    var name = member.Name.UpperToLowerCamelCase();
-                    if (typeDescriptor.TryGetValue(value, name, out var val))
+                    if (typeDescriptor.TryGetValue(value, member.Name, out var val)
+                        || typeDescriptor.TryGetValue(value, member.Name.UpperToLowerCamelCase(), out val))
                     {
                         var output = Convert(val, member.GetDefinedType(), formatProvider);
                         member.SetValue(obj, output);
@@ -245,7 +265,9 @@ namespace Jint.Runtime.Interop
             }
         }
 
-        private Delegate BuildDelegate(Type type, Func<JsValue, JsValue[], JsValue> function)
+        private Delegate BuildDelegate(
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type type,
+            Func<JsValue, JsValue[], JsValue> function)
         {
             var method = type.GetMethod("Invoke");
             var arguments = method!.GetParameters();
@@ -268,9 +290,9 @@ namespace Jint.Runtime.Interop
                 }
                 else if (param.Type.IsArray &&
                          arguments[i].GetCustomAttribute<ParamArrayAttribute>() is not null &&
-                         function.Target is FunctionInstance instance)
+                         function.Target is Function instance)
                 {
-                    for (var j = 0; j < instance.Length; j++)
+                    for (var j = 0; j < instance.GetLength(); j++)
                     {
                         var returnLabel = Expression.Label(typeof(object));
                         var checkIndex = Expression.GreaterThanOrEqual(Expression.Property(param, nameof(Array.Length)), Expression.Constant(j));
@@ -375,7 +397,7 @@ namespace Jint.Runtime.Interop
 
         public static void SetHiddenClrObjectProperty(this ObjectInstance obj, string name, object value)
         {
-            obj.SetOwnProperty(name, new PropertyDescriptor(new ObjectWrapper(obj.Engine, value), PropertyFlag.AllForbidden));
+            obj.SetOwnProperty(name, new PropertyDescriptor(ObjectWrapper.Create(obj.Engine, value), PropertyFlag.AllForbidden));
         }
     }
 }

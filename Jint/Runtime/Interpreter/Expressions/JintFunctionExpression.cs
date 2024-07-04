@@ -1,6 +1,7 @@
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Native.Function;
+using Jint.Native.Object;
+using Jint.Runtime.Descriptors;
 using Jint.Runtime.Environments;
 
 namespace Jint.Runtime.Interpreter.Expressions
@@ -21,8 +22,8 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         public override JsValue GetValue(EvaluationContext context)
         {
-            ScriptFunctionInstance closure;
-            var functionName = _function.Name ?? "";
+            ScriptFunction closure;
+            var functionName = (Key) (_function.Name ?? "");
             if (!_function.Function.Generator)
             {
                 closure = _function.Function.Async
@@ -40,17 +41,17 @@ namespace Jint.Runtime.Interpreter.Expressions
         /// <summary>
         /// https://tc39.es/ecma262/#sec-runtime-semantics-instantiateordinaryfunctionexpression
         /// </summary>
-        private ScriptFunctionInstance InstantiateOrdinaryFunctionExpression(EvaluationContext context, string? name = "")
+        private ScriptFunction InstantiateOrdinaryFunctionExpression(EvaluationContext context, Key name)
         {
             var engine = context.Engine;
             var runningExecutionContext = engine.ExecutionContext;
             var scope = runningExecutionContext.LexicalEnvironment;
 
-            DeclarativeEnvironmentRecord? funcEnv = null;
+            DeclarativeEnvironment? funcEnv = null;
             if (!string.IsNullOrWhiteSpace(name))
             {
                 funcEnv = JintEnvironment.NewDeclarativeEnvironment(engine, engine.ExecutionContext.LexicalEnvironment);
-                funcEnv.CreateImmutableBinding((Key) name!, strict: false);
+                funcEnv.CreateImmutableBinding(name, strict: false);
             }
 
             var privateEnv = runningExecutionContext.PrivateEnvironment;
@@ -68,13 +69,11 @@ namespace Jint.Runtime.Interpreter.Expressions
                 privateEnv
             );
 
-            if (name is not null)
-            {
-                closure.SetFunctionName(JsString.Create(name));
-            }
+            closure.SetFunctionName(JsString.Create(name));
+
             closure.MakeConstructor();
 
-            funcEnv?.InitializeBinding((Key) name!, closure);
+            funcEnv?.InitializeBinding(name, closure);
 
             return closure;
         }
@@ -82,17 +81,17 @@ namespace Jint.Runtime.Interpreter.Expressions
         /// <summary>
         /// https://tc39.es/ecma262/#sec-runtime-semantics-instantiateasyncfunctionexpression
         /// </summary>
-        private ScriptFunctionInstance InstantiateAsyncFunctionExpression(EvaluationContext context, string? name = "")
+        private ScriptFunction InstantiateAsyncFunctionExpression(EvaluationContext context, Key name)
         {
             var engine = context.Engine;
             var runningExecutionContext = engine.ExecutionContext;
             var scope = runningExecutionContext.LexicalEnvironment;
 
-            DeclarativeEnvironmentRecord? funcEnv = null;
+            DeclarativeEnvironment? funcEnv = null;
             if (!string.IsNullOrWhiteSpace(name))
             {
                 funcEnv = JintEnvironment.NewDeclarativeEnvironment(engine, engine.ExecutionContext.LexicalEnvironment);
-                funcEnv.CreateImmutableBinding((Key) name!, strict: false);
+                funcEnv.CreateImmutableBinding(name, strict: false);
             }
 
             var privateScope = runningExecutionContext.PrivateEnvironment;
@@ -110,9 +109,9 @@ namespace Jint.Runtime.Interpreter.Expressions
                 privateScope
             );
 
-            closure.SetFunctionName(name ?? "");
+            closure.SetFunctionName(name.Name);
 
-            funcEnv?.InitializeBinding((Key) name!, closure);
+            funcEnv?.InitializeBinding(name, closure);
 
             return closure;
         }
@@ -121,10 +120,42 @@ namespace Jint.Runtime.Interpreter.Expressions
         /// <summary>
         /// https://tc39.es/ecma262/#sec-runtime-semantics-instantiategeneratorfunctionexpression
         /// </summary>
-        private ScriptFunctionInstance InstantiateGeneratorFunctionExpression(EvaluationContext context, string? name)
+        private ScriptFunction InstantiateGeneratorFunctionExpression(EvaluationContext context, Key name)
         {
-            // TODO generators
-            return InstantiateOrdinaryFunctionExpression(context, name);
+            var engine = context.Engine;
+            var runningExecutionContext = engine.ExecutionContext;
+            var scope = runningExecutionContext.LexicalEnvironment;
+
+            DeclarativeEnvironment? funcEnv = null;
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                funcEnv = JintEnvironment.NewDeclarativeEnvironment(engine, engine.ExecutionContext.LexicalEnvironment);
+                funcEnv.CreateImmutableBinding(name, strict: false);
+            }
+
+            var privateScope = runningExecutionContext.PrivateEnvironment;
+
+            var thisMode = _function.Strict || engine._isStrict
+                ? FunctionThisMode.Strict
+                : FunctionThisMode.Global;
+
+            var intrinsics = engine.Realm.Intrinsics;
+            var closure = intrinsics.Function.OrdinaryFunctionCreate(
+                intrinsics.GeneratorFunction.PrototypeObject,
+                _function,
+                thisMode,
+                funcEnv ?? scope,
+                privateScope
+            );
+
+            closure.SetFunctionName(name.Name);
+
+            var prototype = ObjectInstance.OrdinaryObjectCreate(engine, intrinsics.GeneratorFunction.PrototypeObject.PrototypeObject);
+            closure.DefinePropertyOrThrow(CommonProperties.Prototype, new PropertyDescriptor(prototype, PropertyFlag.Writable));
+
+            funcEnv?.InitializeBinding(name!, closure);
+
+            return closure;
         }
     }
 }

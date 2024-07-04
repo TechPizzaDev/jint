@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Esprima.Ast;
 
 namespace Jint.Runtime.Interpreter.Statements;
 
@@ -16,7 +15,7 @@ internal readonly struct ProbablyBlockStatement
 
     public ProbablyBlockStatement(Statement statement)
     {
-        if (statement is BlockStatement blockStatement)
+        if (statement is NestedBlockStatement blockStatement)
         {
             _blockStatement = new JintBlockStatement(blockStatement);
         }

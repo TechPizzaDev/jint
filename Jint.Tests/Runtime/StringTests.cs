@@ -81,4 +81,30 @@ bar += 'bar';
         Assert.True(result.HasOwnProperty("key"));
         Assert.Equal("value", result["key"]);
     }
+
+    [Fact]
+    public void ShouldCompareWithLocale()
+    {
+        var engine = new Engine();
+        Assert.Equal(1, engine.Evaluate("'王五'.localeCompare('张三')").AsInteger());
+        Assert.Equal(-1, engine.Evaluate("'王五'.localeCompare('张三', 'zh-CN')").AsInteger());
+    }
+
+    public static TheoryData<string, string> GetLithuaniaTestsData()
+    {
+        return new StringTetsLithuaniaData().TestData();
+    }
+
+    /// <summary>
+    /// Lithuanian case is special and Test262 suite tests cover only correct parsing by character. See:
+    /// https://github.com/tc39/test262/blob/main/test/intl402/String/prototype/toLocaleUpperCase/special_casing_Lithuanian.js
+    /// Added logic in the engine needs to parse full strings and not only spare characters. This is what these tests cover.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(GetLithuaniaTestsData))]
+    public void LithuanianToLocaleUpperCase(string parseStr, string result)
+    {
+        var value = _engine.Evaluate($"('{parseStr}').toLocaleUpperCase('lt')").AsString();
+        Assert.Equal(result, value);
+    }
 }

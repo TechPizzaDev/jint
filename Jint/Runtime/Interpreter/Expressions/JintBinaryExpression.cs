@@ -4,7 +4,6 @@ using System.Linq;
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using Esprima.Ast;
 using Jint.Extensions;
 using Jint.Native;
 using Jint.Native.Number;
@@ -22,7 +21,7 @@ namespace Jint.Runtime.Interpreter.Expressions
         private JintExpression _right = null!;
         private bool _initialized;
 
-        private JintBinaryExpression(BinaryExpression expression) : base(expression)
+        private JintBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
         {
             // TODO check https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator
         }
@@ -35,7 +34,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                 return;
             }
 
-            var expression = (BinaryExpression) _expression;
+            var expression = (NonLogicalBinaryExpression) _expression;
             _left = Build(expression.Left);
             _right = Build(expression.Right);
             _initialized = true;
@@ -66,7 +65,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                     var methods = leftMethods.Concat(rightMethods).Where(x => string.Equals(x.Name, clrName, StringComparison.Ordinal) && x.GetParameters().Length == 2);
                     var methodDescriptors = MethodDescriptor.Build(methods.ToArray());
 
-                    return TypeConverter.FindBestMatch(context.Engine, methodDescriptors, _ => arguments).FirstOrDefault().Method;
+                    return InteropHelper.FindBestMatch(context.Engine, methodDescriptors, _ => arguments).FirstOrDefault().Method;
                 });
 
                 if (method != null)
@@ -89,65 +88,65 @@ namespace Jint.Runtime.Interpreter.Expressions
             return false;
         }
 
-        internal static JintExpression Build(BinaryExpression expression)
+        internal static JintExpression Build(NonLogicalBinaryExpression expression)
         {
             JintBinaryExpression? result = null;
             switch (expression.Operator)
             {
-                case BinaryOperator.StrictlyEqual:
+                case Operator.StrictEquality:
                     result = new StrictlyEqualBinaryExpression(expression);
                     break;
-                case BinaryOperator.StrictlyNotEqual:
+                case Operator.StrictInequality:
                     result = new StrictlyNotEqualBinaryExpression(expression);
                     break;
-                case BinaryOperator.Less:
+                case Operator.LessThan:
                     result = new LessBinaryExpression(expression);
                     break;
-                case BinaryOperator.Greater:
+                case Operator.GreaterThan:
                     result = new GreaterBinaryExpression(expression);
                     break;
-                case BinaryOperator.Plus:
+                case Operator.Addition:
                     result = new PlusBinaryExpression(expression);
                     break;
-                case BinaryOperator.Minus:
+                case Operator.Subtraction:
                     result = new MinusBinaryExpression(expression);
                     break;
-                case BinaryOperator.Times:
+                case Operator.Multiplication:
                     result = new TimesBinaryExpression(expression);
                     break;
-                case BinaryOperator.Divide:
+                case Operator.Division:
                     result = new DivideBinaryExpression(expression);
                     break;
-                case BinaryOperator.Equal:
+                case Operator.Equality:
                     result = new EqualBinaryExpression(expression);
                     break;
-                case BinaryOperator.NotEqual:
+                case Operator.Inequality:
                     result = new EqualBinaryExpression(expression, invert: true);
                     break;
-                case BinaryOperator.GreaterOrEqual:
+                case Operator.GreaterThanOrEqual:
                     result = new CompareBinaryExpression(expression, leftFirst: true);
                     break;
-                case BinaryOperator.LessOrEqual:
+                case Operator.LessThanOrEqual:
                     result = new CompareBinaryExpression(expression, leftFirst: false);
                     break;
-                case BinaryOperator.BitwiseAnd:
-                case BinaryOperator.BitwiseOr:
-                case BinaryOperator.BitwiseXor:
-                case BinaryOperator.LeftShift:
-                case BinaryOperator.RightShift:
-                case BinaryOperator.UnsignedRightShift:
+                case Operator.BitwiseAnd:
+                case Operator.BitwiseOr:
+                case Operator.BitwiseXor:
+                case Operator.LeftShift:
+                case Operator.RightShift:
+                case Operator.UnsignedRightShift:
                     result = new BitwiseBinaryExpression(expression);
                     break;
-                case BinaryOperator.InstanceOf:
+                case Operator.InstanceOf:
                     result = new InstanceOfBinaryExpression(expression);
                     break;
-                case BinaryOperator.Exponentiation:
+                case Operator.Exponentiation:
                     result = new ExponentiationBinaryExpression(expression);
                     break;
-                case BinaryOperator.Modulo:
+                case Operator.Remainder:
                     result = new ModuloBinaryExpression(expression);
                     break;
-                case BinaryOperator.In:
+                case Operator.In:
                     result = new InBinaryExpression(expression);
                     break;
                 default:
@@ -155,8 +154,8 @@ namespace Jint.Runtime.Interpreter.Expressions
                     break;
             }
 
-            if (expression.Operator != BinaryOperator.InstanceOf
-                && expression.Operator != BinaryOperator.In
+            if (expression.Operator != Operator.InstanceOf
+                && expression.Operator != Operator.In
                 && expression.Left is Literal leftLiteral
                 && expression.Right is Literal rightLiteral)
             {
@@ -197,7 +196,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class StrictlyEqualBinaryExpression : JintBinaryExpression
         {
-            public StrictlyEqualBinaryExpression(BinaryExpression expression) : base(expression)
+            public StrictlyEqualBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -214,7 +213,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class StrictlyNotEqualBinaryExpression : JintBinaryExpression
         {
-            public StrictlyNotEqualBinaryExpression(BinaryExpression expression) : base(expression)
+            public StrictlyNotEqualBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -230,7 +229,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class LessBinaryExpression : JintBinaryExpression
         {
-            public LessBinaryExpression(BinaryExpression expression) : base(expression)
+            public LessBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -255,7 +254,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class GreaterBinaryExpression : JintBinaryExpression
         {
-            public GreaterBinaryExpression(BinaryExpression expression) : base(expression)
+            public GreaterBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -280,7 +279,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class PlusBinaryExpression : JintBinaryExpression
         {
-            public PlusBinaryExpression(BinaryExpression expression) : base(expression)
+            public PlusBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -325,7 +324,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class MinusBinaryExpression : JintBinaryExpression
         {
-            public MinusBinaryExpression(BinaryExpression expression) : base(expression)
+            public MinusBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -356,6 +355,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                 }
                 else
                 {
+                    JintBinaryExpression.AssertValidBigIntArithmeticOperands(left, right);
                     number = JsBigInt.Create(TypeConverter.ToBigInt(left) - TypeConverter.ToBigInt(right));
                 }
 
@@ -365,7 +365,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class TimesBinaryExpression : JintBinaryExpression
         {
-            public TimesBinaryExpression(BinaryExpression expression) : base(expression)
+            public TimesBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -408,7 +408,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class DivideBinaryExpression : JintBinaryExpression
         {
-            public DivideBinaryExpression(BinaryExpression expression) : base(expression)
+            public DivideBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -435,7 +435,7 @@ namespace Jint.Runtime.Interpreter.Expressions
         {
             private readonly bool _invert;
 
-            public EqualBinaryExpression(BinaryExpression expression, bool invert = false) : base(expression)
+            public EqualBinaryExpression(NonLogicalBinaryExpression expression, bool invert = false) : base(expression)
             {
                 _invert = invert;
             }
@@ -466,7 +466,7 @@ namespace Jint.Runtime.Interpreter.Expressions
         {
             private readonly bool _leftFirst;
 
-            public CompareBinaryExpression(BinaryExpression expression, bool leftFirst) : base(expression)
+            public CompareBinaryExpression(NonLogicalBinaryExpression expression, bool leftFirst) : base(expression)
             {
                 _leftFirst = leftFirst;
             }
@@ -494,7 +494,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class InstanceOfBinaryExpression : JintBinaryExpression
         {
-            public InstanceOfBinaryExpression(BinaryExpression expression) : base(expression)
+            public InstanceOfBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -510,7 +510,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class ExponentiationBinaryExpression : JintBinaryExpression
         {
-            public ExponentiationBinaryExpression(BinaryExpression expression) : base(expression)
+            public ExponentiationBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -637,7 +637,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class InBinaryExpression : JintBinaryExpression
         {
-            public InBinaryExpression(BinaryExpression expression) : base(expression)
+            public InBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -667,7 +667,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private sealed class ModuloBinaryExpression : JintBinaryExpression
         {
-            public ModuloBinaryExpression(BinaryExpression expression) : base(expression)
+            public ModuloBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
             }
 
@@ -769,20 +769,20 @@ namespace Jint.Runtime.Interpreter.Expressions
                 {
                     return _operator switch
                     {
-                        BinaryOperator.BitwiseAnd => "op_BitwiseAnd",
-                        BinaryOperator.BitwiseOr => "op_BitwiseOr",
-                        BinaryOperator.BitwiseXor => "op_ExclusiveOr",
-                        BinaryOperator.LeftShift => "op_LeftShift",
-                        BinaryOperator.RightShift => "op_RightShift",
-                        BinaryOperator.UnsignedRightShift => "op_UnsignedRightShift",
+                        Operator.BitwiseAnd => "op_BitwiseAnd",
+                        Operator.BitwiseOr => "op_BitwiseOr",
+                        Operator.BitwiseXor => "op_ExclusiveOr",
+                        Operator.LeftShift => "op_LeftShift",
+                        Operator.RightShift => "op_RightShift",
+                        Operator.UnsignedRightShift => "op_UnsignedRightShift",
                         _ => null
                     };
                 }
             }
 
-            private readonly BinaryOperator _operator;
+            private readonly Operator _operator;
 
-            public BitwiseBinaryExpression(BinaryExpression expression) : base(expression)
+            public BitwiseBinaryExpression(NonLogicalBinaryExpression expression) : base(expression)
             {
                 _operator = expression.Operator;
             }
@@ -816,22 +816,22 @@ namespace Jint.Runtime.Interpreter.Expressions
                     JsValue? result = null;
                     switch (_operator)
                     {
-                        case BinaryOperator.BitwiseAnd:
+                        case Operator.BitwiseAnd:
                             result = JsNumber.Create(leftValue & rightValue);
                             break;
-                        case BinaryOperator.BitwiseOr:
+                        case Operator.BitwiseOr:
                             result = JsNumber.Create(leftValue | rightValue);
                             break;
-                        case BinaryOperator.BitwiseXor:
+                        case Operator.BitwiseXor:
                             result = JsNumber.Create(leftValue ^ rightValue);
                             break;
-                        case BinaryOperator.LeftShift:
+                        case Operator.LeftShift:
                             result = JsNumber.Create(leftValue << (int) ((uint) rightValue & 0x1F));
                             break;
-                        case BinaryOperator.RightShift:
+                        case Operator.RightShift:
                             result = JsNumber.Create(leftValue >> (int) ((uint) rightValue & 0x1F));
                             break;
-                        case BinaryOperator.UnsignedRightShift:
+                        case Operator.UnsignedRightShift:
                             result = JsNumber.Create((uint) leftValue >> (int) ((uint) rightValue & 0x1F));
                             break;
                         default:
@@ -849,7 +849,7 @@ namespace Jint.Runtime.Interpreter.Expressions
             {
                 switch (_operator)
                 {
-                    case BinaryOperator.BitwiseAnd:
+                    case Operator.BitwiseAnd:
                     {
                         if (!left.IsBigInt())
                         {
@@ -859,7 +859,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                         return JsBigInt.Create(TypeConverter.ToBigInt(left) & TypeConverter.ToBigInt(right));
                     }
 
-                    case BinaryOperator.BitwiseOr:
+                    case Operator.BitwiseOr:
                     {
                         if (!left.IsBigInt())
                         {
@@ -868,7 +868,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                         return JsBigInt.Create(TypeConverter.ToBigInt(left) | TypeConverter.ToBigInt(right));
                     }
 
-                    case BinaryOperator.BitwiseXor:
+                    case Operator.BitwiseXor:
                     {
                         if (!left.IsBigInt())
                         {
@@ -877,7 +877,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                         return JsBigInt.Create(TypeConverter.ToBigInt(left) ^ TypeConverter.ToBigInt(right));
                     }
 
-                    case BinaryOperator.LeftShift:
+                    case Operator.LeftShift:
                     {
                         if (!left.IsBigInt())
                         {
@@ -886,7 +886,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                         return JsBigInt.Create(TypeConverter.ToBigInt(left) << (int) TypeConverter.ToBigInt(right));
                     }
 
-                    case BinaryOperator.RightShift:
+                    case Operator.RightShift:
                     {
                         if (!left.IsBigInt())
                         {
@@ -895,7 +895,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                         return JsBigInt.Create(TypeConverter.ToBigInt(left) >> (int) TypeConverter.ToBigInt(right));
                     }
 
-                    case BinaryOperator.UnsignedRightShift:
+                    case Operator.UnsignedRightShift:
                     {
                         if (!left.IsBigInt())
                         {

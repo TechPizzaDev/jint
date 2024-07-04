@@ -3,6 +3,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Jint.Extensions;
 
+#pragma warning disable IL2072
+
 namespace Jint.Runtime.Interop
 {
     internal sealed class MethodDescriptor
@@ -127,7 +129,7 @@ namespace Jint.Runtime.Interop
                     }
                     else if (!ReflectionExtensions.TryConvertViaTypeCoercion(parameterType, valueCoercionType, value, out converted))
                     {
-                        converted = engine.ClrTypeConverter.Convert(
+                        converted = engine.TypeConverter.Convert(
                             value.ToObject(),
                             parameterType,
                             System.Globalization.CultureInfo.InvariantCulture);

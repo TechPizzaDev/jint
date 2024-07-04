@@ -3,6 +3,7 @@ using Jint.Runtime;
 using Jint.Runtime.Descriptors;
 using Jint.Runtime.Environments;
 using Jint.Runtime.Interpreter;
+using Environment = Jint.Runtime.Environments.Environment;
 
 namespace Jint.Native.Function
 {
@@ -46,10 +47,10 @@ namespace Jint.Native.Function
         /// <summary>
         /// https://tc39.es/ecma262/#sec-runtime-semantics-instantiatefunctionobject
         /// </summary>
-        internal FunctionInstance InstantiateFunctionObject(
+        internal Function InstantiateFunctionObject(
             JintFunctionDefinition functionDeclaration,
-            EnvironmentRecord scope,
-            PrivateEnvironmentRecord? privateEnv)
+            Environment scope,
+            PrivateEnvironment? privateEnv)
         {
             var function = functionDeclaration.Function;
             if (!function.Generator)
@@ -67,10 +68,10 @@ namespace Jint.Native.Function
         /// <summary>
         /// https://tc39.es/ecma262/#sec-runtime-semantics-instantiateasyncfunctionobject
         /// </summary>
-        private ScriptFunctionInstance InstantiateAsyncFunctionObject(
+        private ScriptFunction InstantiateAsyncFunctionObject(
             JintFunctionDefinition functionDeclaration,
-            EnvironmentRecord env,
-            PrivateEnvironmentRecord? privateEnv)
+            Environment env,
+            PrivateEnvironment? privateEnv)
         {
             var F = OrdinaryFunctionCreate(
                 _realm.Intrinsics.AsyncFunction.PrototypeObject,
@@ -87,10 +88,10 @@ namespace Jint.Native.Function
         /// <summary>
         /// https://tc39.es/ecma262/#sec-runtime-semantics-instantiateordinaryfunctionobject
         /// </summary>
-        private ScriptFunctionInstance InstantiateOrdinaryFunctionObject(
+        private ScriptFunction InstantiateOrdinaryFunctionObject(
             JintFunctionDefinition functionDeclaration,
-            EnvironmentRecord env,
-            PrivateEnvironmentRecord? privateEnv)
+            Environment env,
+            PrivateEnvironment? privateEnv)
         {
             var F = OrdinaryFunctionCreate(
                 _realm.Intrinsics.Function.PrototypeObject,
@@ -108,13 +109,29 @@ namespace Jint.Native.Function
         /// <summary>
         /// https://tc39.es/ecma262/#sec-runtime-semantics-instantiategeneratorfunctionobject
         /// </summary>
-        private ScriptFunctionInstance InstantiateGeneratorFunctionObject(
+        private ScriptFunction InstantiateGeneratorFunctionObject(
             JintFunctionDefinition functionDeclaration,
-            EnvironmentRecord scope,
-            PrivateEnvironmentRecord? privateScope)
+            Environment scope,
+            PrivateEnvironment? privateScope)
         {
-            // TODO generators
-            return InstantiateOrdinaryFunctionObject(functionDeclaration, scope, privateScope);
+            var thisMode = functionDeclaration.Strict || _engine._isStrict
+                ? FunctionThisMode.Strict
+                : FunctionThisMode.Global;
+
+            var name = functionDeclaration.Function.Id?.Name ?? "default";
+            var F = OrdinaryFunctionCreate(
+                _realm.Intrinsics.GeneratorFunction.PrototypeObject,
+                functionDeclaration,
+                thisMode,
+                scope,
+                privateScope);
+
+            F.SetFunctionName(name);
+
+            var prototype = OrdinaryObjectCreate(_engine, _realm.Intrinsics.GeneratorFunction.PrototypeObject.PrototypeObject);
+            F.DefinePropertyOrThrow(CommonProperties.Prototype, new PropertyDescriptor(prototype, PropertyFlag.Writable));
+
+            return F;
         }
     }
 }

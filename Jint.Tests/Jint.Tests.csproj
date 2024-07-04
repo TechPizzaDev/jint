@@ -20,10 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="Microsoft.CSharp" Condition=" '$(TargetFramework)' == 'net462' " />
-  </ItemGroup>
-
-  <ItemGroup>
+    <PackageReference Include="Acornima.Extras" />
+    <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Flurl.Http.Signed" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -35,6 +33,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="FluentAssertions" />
     <Using Include="Xunit" />
   </ItemGroup>
 

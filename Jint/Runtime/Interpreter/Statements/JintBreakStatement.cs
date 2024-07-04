@@ -1,4 +1,4 @@
-using Esprima.Ast;
+using Jint.Native;
 
 namespace Jint.Runtime.Interpreter.Statements;
 
@@ -14,6 +14,6 @@ internal sealed class JintBreakStatement : JintStatement<BreakStatement>
     protected override Completion ExecuteInternal(EvaluationContext context)
     {
         context.Target = _statement.Label?.Name;
-        return new Completion(CompletionType.Break, null!, _statement);
+        return new Completion(CompletionType.Break, JsEmpty.Instance, _statement);
     }
 }

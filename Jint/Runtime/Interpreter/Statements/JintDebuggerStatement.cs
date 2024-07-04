@@ -1,4 +1,4 @@
-using Esprima.Ast;
+using Jint.Native;
 using Jint.Runtime.Debugger;
 
 namespace Jint.Runtime.Interpreter.Statements
@@ -28,7 +28,7 @@ namespace Jint.Runtime.Interpreter.Statements
                     break;
             }
 
-            return new Completion(CompletionType.Normal, null!, _statement);
+            return new Completion(CompletionType.Normal, JsEmpty.Instance, _statement);
         }
     }
 }

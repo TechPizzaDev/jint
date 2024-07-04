@@ -1,4 +1,3 @@
-using Esprima.Ast;
 using Jint.Runtime.Environments;
 
 namespace Jint.Runtime.Interpreter.Expressions
@@ -11,7 +10,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         protected override object EvaluateInternal(EvaluationContext context)
         {
-            var envRec = (FunctionEnvironmentRecord) context.Engine.ExecutionContext.GetThisEnvironment();
+            var envRec = (FunctionEnvironment) context.Engine.ExecutionContext.GetThisEnvironment();
             var activeFunction = envRec._functionObject;
             var superConstructor = activeFunction.GetPrototypeOf();
             return superConstructor!;

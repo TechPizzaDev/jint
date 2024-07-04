@@ -183,7 +183,9 @@ namespace Jint.Tests.Runtime
 
         private class BaseClassWithStatics
         {
+#pragma warning disable CS0414 // Field is assigned but its value is never used
             public static int a = 42;
+#pragma warning restore CS0414 // Field is assigned but its value is never used
         }
 
         private class InheritingFromClassWithStatics : BaseClassWithStatics
@@ -233,6 +235,50 @@ namespace Jint.Tests.Runtime
             public bool Remove(KeyValuePair<string, TValue> item) => _dictionary.Remove(item.Key);
             public bool TryGetValue(string key, [MaybeNullWhen(false)] out TValue value) => _dictionary.TryGetValue(key, out value);
             IEnumerator IEnumerable.GetEnumerator() => _dictionary.GetEnumerator();
+        }
+
+        public class ClassWithData
+        {
+            public int Age => 42;
+
+            public DataType Data { get; set; }
+
+            public class DataType
+            {
+                public string Value { get; set; }
+            }
+        }
+
+        [Fact]
+        public void NewTypedObjectFromUntypedInitializerShouldBeMapped()
+        {
+            var engine = new Engine();
+
+            engine.SetValue("obj", new ClassWithData());
+            engine.Execute("obj.Data = { Value: '123' };");
+            var obj = engine.Evaluate("obj").ToObject() as ClassWithData;
+
+            Assert.Equal("123", obj?.Data.Value);
+        }
+
+        [Fact]
+        public void CanConfigureStrictAccess()
+        {
+            var engine = new Engine();
+
+            engine.SetValue("obj", new ClassWithData());
+            engine.Evaluate("obj.Age").AsNumber().Should().Be(42);
+            engine.Evaluate("obj.AgeMissing").Should().Be(JsValue.Undefined);
+
+            engine = new Engine(options =>
+            {
+                options.Interop.ThrowOnUnresolvedMember = true;
+            });
+
+            engine.SetValue("obj", new ClassWithData());
+            engine.Evaluate("obj.Age").AsNumber().Should().Be(42);
+
+            engine.Invoking(e => e.Evaluate("obj.AgeMissing")).Should().Throw<MissingMemberException>();
         }
     }
 }

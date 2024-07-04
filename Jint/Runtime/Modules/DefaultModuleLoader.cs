@@ -1,9 +1,6 @@
-using Esprima;
-using Esprima.Ast;
-
 namespace Jint.Runtime.Modules;
 
-public sealed class DefaultModuleLoader : IModuleLoader
+public class DefaultModuleLoader : ModuleLoader
 {
     private readonly Uri _basePath;
     private readonly bool _restrictToBasePath;
@@ -32,7 +29,7 @@ public sealed class DefaultModuleLoader : IModuleLoader
             _basePath = temp;
         }
 
-        if (_basePath.AbsolutePath[_basePath.AbsolutePath.Length - 1] != '/')
+        if (_basePath.AbsolutePath[^1] != '/')
         {
             var uriBuilder = new UriBuilder(_basePath);
             uriBuilder.Path += '/';
@@ -40,8 +37,9 @@ public sealed class DefaultModuleLoader : IModuleLoader
         }
     }
 
-    public ResolvedSpecifier Resolve(string? referencingModuleLocation, string specifier)
+    public override ResolvedSpecifier Resolve(string? referencingModuleLocation, ModuleRequest moduleRequest)
     {
+        var specifier = moduleRequest.Specifier;
         if (string.IsNullOrEmpty(specifier))
         {
             ExceptionHelper.ThrowModuleResolutionException("Invalid Module Specifier", specifier, referencingModuleLocation);
@@ -57,7 +55,8 @@ public sealed class DefaultModuleLoader : IModuleLoader
         }
         else if (IsRelative(specifier))
         {
-            resolved = new Uri(referencingModuleLocation != null ? new Uri(referencingModuleLocation, UriKind.Absolute) : _basePath, specifier);
+            var baseUri = BuildBaseUri(referencingModuleLocation);
+            resolved = new Uri(baseUri, specifier);
         }
         else if (specifier[0] == '#')
         {
@@ -67,7 +66,7 @@ public sealed class DefaultModuleLoader : IModuleLoader
         else
         {
             return new ResolvedSpecifier(
-                specifier,
+                moduleRequest,
                 specifier,
                 Uri: null,
                 SpecifierType.Bare
@@ -96,53 +95,52 @@ public sealed class DefaultModuleLoader : IModuleLoader
         }
 
         return new ResolvedSpecifier(
-            specifier,
+            moduleRequest,
             resolved.AbsoluteUri,
             resolved,
             SpecifierType.RelativeOrAbsolute
         );
     }
 
-    public Module LoadModule(Engine engine, ResolvedSpecifier resolved)
+    private Uri BuildBaseUri(string? referencingModuleLocation)
     {
+        if (referencingModuleLocation is not null)
+        {
+            /*
+              "referencingModuleLocation" might be relative or an invalid URI when a module imports other
+               modules and the importing module is called directly from .NET code.
+               e.g. "engine.Modules.Import("my-module")" and "my-module" imports other modules.
+
+               Path traversal prevention is not a concern here because it is checked later
+               (if _restrictToBasePath is set to true).
+            */
+            if (Uri.TryCreate(referencingModuleLocation, UriKind.Absolute, out var referencingLocation) ||
+                Uri.TryCreate(_basePath, referencingModuleLocation, out referencingLocation))
+                return referencingLocation;
+        }
+        return _basePath;
+    }
+
+    protected override string LoadModuleContents(Engine engine, ResolvedSpecifier resolved)
+    {
+        var specifier = resolved.ModuleRequest.Specifier;
         if (resolved.Type != SpecifierType.RelativeOrAbsolute)
         {
-            ExceptionHelper.ThrowNotSupportedException($"The default module loader can only resolve files. You can define modules directly to allow imports using {nameof(Engine)}.{nameof(Engine.AddModule)}(). Attempted to resolve: '{resolved.Specifier}'.");
-            return default;
+            ExceptionHelper.ThrowNotSupportedException($"The default module loader can only resolve files. You can define modules directly to allow imports using {nameof(Engine)}.{nameof(Engine.Modules.Add)}(). Attempted to resolve: '{specifier}'.");
         }
 
         if (resolved.Uri == null)
         {
-            ExceptionHelper.ThrowInvalidOperationException($"Module '{resolved.Specifier}' of type '{resolved.Type}' has no resolved URI.");
+            ExceptionHelper.ThrowInvalidOperationException($"Module '{specifier}' of type '{resolved.Type}' has no resolved URI.");
         }
 
         var fileName = Uri.UnescapeDataString(resolved.Uri.AbsolutePath);
         if (!File.Exists(fileName))
         {
-            ExceptionHelper.ThrowModuleResolutionException("Module Not Found", resolved.Specifier, parent: null, fileName);
-            return default;
+            ExceptionHelper.ThrowModuleResolutionException("Module Not Found", specifier, parent: null, fileName);
         }
 
-        var code = File.ReadAllText(fileName);
-
-        var source = resolved.Uri.LocalPath;
-        Module module;
-        try
-        {
-            module = new JavaScriptParser().ParseModule(code, source);
-        }
-        catch (ParserException ex)
-        {
-            ExceptionHelper.ThrowSyntaxError(engine.Realm, $"Error while loading module: error in module '{source}': {ex.Error}");
-            module = null;
-        }
-        catch (Exception)
-        {
-            ExceptionHelper.ThrowJavaScriptException(engine, $"Could not load module {source}", (Location) default);
-            module = null;
-        }
-
-        return module;
+        return File.ReadAllText(fileName);
     }
 
     private static bool IsRelative(string specifier)

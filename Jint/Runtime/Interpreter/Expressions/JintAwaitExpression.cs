@@ -1,5 +1,4 @@
-using Esprima.Ast;
-using Jint.Native.Promise;
+using Jint.Native;
 
 namespace Jint.Runtime.Interpreter.Expressions;
 
@@ -35,7 +34,6 @@ internal sealed class JintAwaitExpression : JintExpression
                 value = promiseInstance;
             }
 
-            engine.RunAvailableContinuations();
             return value.UnwrapIfPromise();
         }
         catch (PromiseRejectedException e)

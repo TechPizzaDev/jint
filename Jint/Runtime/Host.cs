@@ -6,12 +6,14 @@ using Jint.Runtime.Descriptors;
 using Jint.Runtime.Environments;
 using Jint.Runtime.Interop;
 using Jint.Runtime.Modules;
+using Module = Jint.Runtime.Modules.Module;
 
 namespace Jint.Runtime
 {
     public class Host
     {
         private Engine? _engine;
+        private readonly List<string> _supportedImportAttributes = ["type"];
 
         protected Engine Engine
         {
@@ -58,7 +60,7 @@ namespace Jint.Runtime
             Engine.EnterExecutionContext(newContext);
         }
 
-        protected virtual GlobalEnvironmentRecord CreateGlobalEnvironment(ObjectInstance globalObject)
+        internal virtual GlobalEnvironment CreateGlobalEnvironment(ObjectInstance globalObject)
         {
             return JintEnvironment.NewGlobalEnvironment(Engine, globalObject, globalObject);
         }
@@ -115,24 +117,24 @@ namespace Jint.Runtime
         }
 
         /// <summary>
-        /// https://tc39.es/ecma262/#sec-hostresolveimportedmodule
+        /// https://tc39.es/ecma262/#sec-GetImportedModule
         /// </summary>
-        internal virtual ModuleRecord ResolveImportedModule(IScriptOrModule? referencingScriptOrModule, string specifier)
+        internal virtual Module GetImportedModule(IScriptOrModule? referrer, ModuleRequest request)
         {
-            return Engine.LoadModule(referencingScriptOrModule?.Location, specifier);
+            return Engine.Modules.Load(referrer?.Location, request);
         }
 
         /// <summary>
-        /// https://tc39.es/ecma262/#sec-hostimportmoduledynamically
+        /// https://tc39.es/ecma262/#sec-HostLoadImportedModule
         /// </summary>
-        internal virtual void ImportModuleDynamically(IScriptOrModule? referencingModule, string specifier, PromiseCapability promiseCapability)
+        internal virtual void LoadImportedModule(IScriptOrModule? referrer, ModuleRequest moduleRequest, PromiseCapability payload)
         {
             var promise = Engine.RegisterPromise();
 
             try
             {
                 // This should instead return the PromiseInstance returned by ModuleRecord.Evaluate (currently done in Engine.EvaluateModule), but until we have await this will do.
-                Engine.ImportModule(specifier, referencingModule?.Location);
+                Engine.Modules.Import(moduleRequest, referrer?.Location);
                 promise.Resolve(JsValue.Undefined);
             }
             catch (JavaScriptException ex)
@@ -140,43 +142,43 @@ namespace Jint.Runtime
                 promise.Reject(ex.Error);
             }
 
-            FinishDynamicImport(referencingModule, specifier, promiseCapability, (JsPromise) promise.Promise);
+            FinishLoadingImportedModule(referrer, moduleRequest, payload, (JsPromise) promise.Promise);
         }
 
         /// <summary>
-        /// https://tc39.es/ecma262/#sec-finishdynamicimport
+        /// https://tc39.es/ecma262/#sec-FinishLoadingImportedModule
         /// </summary>
-        internal virtual void FinishDynamicImport(IScriptOrModule? referencingModule, string specifier, PromiseCapability promiseCapability, JsPromise innerPromise)
+        internal virtual void FinishLoadingImportedModule(IScriptOrModule? referrer, ModuleRequest moduleRequest, PromiseCapability payload, JsPromise result)
         {
-            var onFulfilled = new ClrFunctionInstance(Engine, "", (thisObj, args) =>
+            var onFulfilled = new ClrFunction(Engine, "", (thisObj, args) =>
             {
-                var moduleRecord = ResolveImportedModule(referencingModule, specifier);
+                var moduleRecord = GetImportedModule(referrer, moduleRequest);
                 try
                 {
-                    var ns = ModuleRecord.GetModuleNamespace(moduleRecord);
-                    promiseCapability.Resolve.Call(JsValue.Undefined, new JsValue[] { ns });
+                    var ns = Module.GetModuleNamespace(moduleRecord);
+                    payload.Resolve.Call(JsValue.Undefined, new JsValue[] { ns });
                 }
                 catch (JavaScriptException ex)
                 {
-                    promiseCapability.Reject.Call(JsValue.Undefined, new [] { ex.Error });
+                    payload.Reject.Call(JsValue.Undefined, new [] { ex.Error });
                 }
                 return JsValue.Undefined;
             }, 0, PropertyFlag.Configurable);
 
-            var onRejected = new ClrFunctionInstance(Engine, "", (thisObj, args) =>
+            var onRejected = new ClrFunction(Engine, "", (thisObj, args) =>
             {
                 var error = args.At(0);
-                promiseCapability.Reject.Call(JsValue.Undefined, new [] { error });
+                payload.Reject.Call(JsValue.Undefined, new [] { error });
                 return JsValue.Undefined;
             }, 0, PropertyFlag.Configurable);
 
-            PromiseOperations.PerformPromiseThen(Engine, innerPromise, onFulfilled, onRejected, promiseCapability);
+            PromiseOperations.PerformPromiseThen(Engine, result, onFulfilled, onRejected, payload);
         }
 
         /// <summary>
         /// https://tc39.es/ecma262/#sec-hostgetimportmetaproperties
         /// </summary>
-        public virtual List<KeyValuePair<JsValue, JsValue>> GetImportMetaProperties(ModuleRecord moduleRecord)
+        public virtual List<KeyValuePair<JsValue, JsValue>> GetImportMetaProperties(Module moduleRecord)
         {
             return new List<KeyValuePair<JsValue, JsValue>>();
         }
@@ -184,7 +186,7 @@ namespace Jint.Runtime
         /// <summary>
         /// https://tc39.es/ecma262/#sec-hostfinalizeimportmeta
         /// </summary>
-        public virtual void FinalizeImportMeta(ObjectInstance importMeta, ModuleRecord moduleRecord)
+        public virtual void FinalizeImportMeta(ObjectInstance importMeta, Module moduleRecord)
         {
         }
 
@@ -209,6 +211,11 @@ namespace Jint.Runtime
         internal void HostEnqueuePromiseJob(Action job, Realm realm)
         {
             Engine.AddToEventLoop(job);
+        }
+
+        internal virtual List<string> GetSupportedImportAttributes()
+        {
+            return _supportedImportAttributes;
         }
     }
 

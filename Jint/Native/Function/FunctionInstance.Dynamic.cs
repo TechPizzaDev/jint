@@ -1,20 +1,22 @@
-using Esprima;
-using Esprima.Ast;
 using Jint.Native.Object;
 using Jint.Runtime;
+using Jint.Runtime.Descriptors;
 using Jint.Runtime.Environments;
 using Jint.Runtime.Interpreter;
+using Environment = Jint.Runtime.Environments.Environment;
 
 namespace Jint.Native.Function;
 
-public partial class FunctionInstance
+#pragma warning disable MA0049
+public partial class Function
+#pragma warning restore MA0049
 {
     private static readonly JsString _functionNameAnonymous = new JsString("anonymous");
 
     /// <summary>
     /// https://tc39.es/ecma262/#sec-createdynamicfunction
     /// </summary>
-    internal FunctionInstance CreateDynamicFunction(
+    internal Function CreateDynamicFunction(
         ObjectInstance constructor,
         JsValue newTarget,
         FunctionKind kind,
@@ -42,6 +44,8 @@ public partial class FunctionInstance
                 fallbackProto = static intrinsics => intrinsics.AsyncFunction.PrototypeObject;
                 break;
             case FunctionKind.Generator:
+                fallbackProto = static intrinsics => intrinsics.GeneratorFunction.PrototypeObject;
+                break;
             case FunctionKind.AsyncGenerator:
             default:
                 ExceptionHelper.ThrowArgumentOutOfRangeException(nameof(kind), kind.ToString());
@@ -138,14 +142,15 @@ public partial class FunctionInstance
                 }
             }
 
-            JavaScriptParser parser = new(new ParserOptions
+            var parserOptions = _engine.GetActiveParserOptions();
+            if (!parserOptions.AllowReturnOutsideFunction)
             {
-                Tolerant = false,
-                RegexTimeout = _engine.Options.Constraints.RegexTimeout
-            });
-            function = (IFunction) parser.ParseScript(functionExpression, source: null, _engine._isStrict).Body[0];
+                parserOptions = parserOptions with { AllowReturnOutsideFunction = true };
+            }
+            Parser parser = new(parserOptions);
+            function = (IFunction) parser.ParseScript(functionExpression, strict: _engine._isStrict).Body[0];
         }
-        catch (ParserException ex)
+        catch (ParseErrorException ex)
         {
             ExceptionHelper.ThrowSyntaxError(_engine.ExecutionContext.Realm, ex.Message);
         }
@@ -153,15 +158,16 @@ public partial class FunctionInstance
         var proto = GetPrototypeFromConstructor(newTarget, fallbackProto);
         var realmF = _realm;
         var scope = realmF.GlobalEnv;
-        PrivateEnvironmentRecord? privateEnv = null;
+        PrivateEnvironment? privateEnv = null;
 
         var definition = new JintFunctionDefinition(function);
-        FunctionInstance F = OrdinaryFunctionCreate(proto, definition, function.Strict ? FunctionThisMode.Strict : FunctionThisMode.Global, scope, privateEnv);
+        Function F = OrdinaryFunctionCreate(proto, definition, function.IsStrict() ? FunctionThisMode.Strict : FunctionThisMode.Global, scope, privateEnv);
         F.SetFunctionName(_functionNameAnonymous, force: true);
 
         if (kind == FunctionKind.Generator)
         {
-            ExceptionHelper.ThrowNotImplementedException("generators not implemented");
+            var prototype = OrdinaryObjectCreate(_engine, _realm.Intrinsics.GeneratorFunction.PrototypeObject.PrototypeObject);
+            F.DefinePropertyOrThrow(CommonProperties.Prototype, new PropertyDescriptor(prototype, PropertyFlag.Writable));
         }
         else if (kind == FunctionKind.AsyncGenerator)
         {
@@ -181,14 +187,14 @@ public partial class FunctionInstance
     /// <summary>
     /// https://tc39.es/ecma262/#sec-ordinaryfunctioncreate
     /// </summary>
-    internal ScriptFunctionInstance OrdinaryFunctionCreate(
+    internal ScriptFunction OrdinaryFunctionCreate(
         ObjectInstance functionPrototype,
         JintFunctionDefinition function,
         FunctionThisMode thisMode,
-        EnvironmentRecord scope,
-        PrivateEnvironmentRecord? privateScope)
+        Environment scope,
+        PrivateEnvironment? privateScope)
     {
-        return new ScriptFunctionInstance(
+        return new ScriptFunction(
             _engine,
             function,
             scope,

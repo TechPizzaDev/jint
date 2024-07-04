@@ -1,5 +1,4 @@
 ﻿using System.Reflection;
-using Esprima;
 using Jint.Native;
 using Jint.Runtime;
 using Jint.Tests.Runtime.TestClasses;
@@ -73,7 +72,7 @@ var b = function(v) {
             Assert.Equal("Cannot read property 'yyy' of undefined", e.Message);
             Assert.Equal(3, e.Location.Start.Line);
             Assert.Equal(15, e.Location.Start.Column);
-            Assert.Equal("custom.js", e.Location.Source);
+            Assert.Equal("custom.js", e.Location.SourceFile);
 
             var stack = e.JavaScriptStackTrace;
             EqualIgnoringNewLineDifferences(@"   at a (v) custom.js:3:16
@@ -100,7 +99,7 @@ var b = function(v) {
             Assert.Equal("Error thrown from script", e.Message);
             Assert.Equal(3, e.Location.Start.Line);
             Assert.Equal(8, e.Location.Start.Column);
-            Assert.Equal("custom.js", e.Location.Source);
+            Assert.Equal("custom.js", e.Location.SourceFile);
 
             var stack = e.JavaScriptStackTrace;
             EqualIgnoringNewLineDifferences(@"   at a (v) custom.js:3:9
@@ -295,12 +294,12 @@ var x = b(7);";
     return item;
 })(getItem);";
 
-            var parserOptions = new ParserOptions
+            var parsingOptions = new ScriptParsingOptions
             {
-                RegExpParseMode = RegExpParseMode.AdaptToInterpreted,
+                CompileRegex = false,
                 Tolerant = true
             };
-            var ex = Assert.Throws<JavaScriptException>(() => engine.Execute(script, "get-item.js", parserOptions));
+            var ex = Assert.Throws<JavaScriptException>(() => engine.Execute(script, "get-item.js", parsingOptions));
 
             const string expected = @"Error: Cannot read property '5' of null
    at getItem (items, itemIndex) get-item.js:2:22
@@ -384,11 +383,11 @@ try {
         [Fact]
         public void CallStackWorksWithRecursiveCalls()
         {
-            static ParserOptions CreateParserOptions()
+            static ScriptParsingOptions CreateParsingOptions()
             {
-                return new ParserOptions
+                return new ScriptParsingOptions
                 {
-                    RegExpParseMode = RegExpParseMode.AdaptToInterpreted,
+                    CompileRegex = false,
                     Tolerant = true
                 };
             }
@@ -407,13 +406,13 @@ executeFile(""second-file.js"");",
 nuм -= 3;",
                         _ => throw new FileNotFoundException($"File '{path}' not exist.", path)
                     };
-                    engine.Execute(content, path, CreateParserOptions());
+                    engine.Execute(content, path, CreateParsingOptions());
                 }));
                 engine.Execute(
                     @"var num = 5;
 executeFile(""first-file.js"");",
                     "main-file.js",
-                    CreateParserOptions()
+                    CreateParsingOptions()
                 );
             });
 
@@ -463,7 +462,7 @@ $variable1 + -variable2 - variable3;");
         public void JavaScriptExceptionLocationOnModuleShouldBeRight()
         {
             var engine = new Engine();
-            engine.AddModule("my_module", @"
+            engine.Modules.Add("my_module", @"
 function throw_error(){
     throw Error(""custom error"")
 }
@@ -471,7 +470,7 @@ function throw_error(){
 throw_error();
             ");
 
-            var ex= Assert.Throws<JavaScriptException>(() => engine.ImportModule("my_module"));
+            var ex= Assert.Throws<JavaScriptException>(() => engine.Modules.Import("my_module"));
             Assert.Equal(ex.Location.Start.Line, 3);
             Assert.Equal(ex.Location.Start.Column, 10);
         }

@@ -10,6 +10,7 @@ using Jint.Native.Date;
 using Jint.Native.Error;
 using Jint.Native.FinalizationRegistry;
 using Jint.Native.Function;
+using Jint.Native.Generator;
 using Jint.Native.Iterator;
 using Jint.Native.Json;
 using Jint.Native.Map;
@@ -22,6 +23,7 @@ using Jint.Native.Reflect;
 using Jint.Native.RegExp;
 using Jint.Native.Set;
 using Jint.Native.ShadowRealm;
+using Jint.Native.SharedArrayBuffer;
 using Jint.Native.String;
 using Jint.Native.Symbol;
 using Jint.Native.TypedArray;
@@ -60,12 +62,13 @@ namespace Jint.Runtime
         private PromiseConstructor? _promise;
         private ProxyConstructor? _proxy;
         private ReflectInstance? _reflect;
-        private EvalFunctionInstance? _eval;
+        private EvalFunction? _eval;
         private DateConstructor? _date;
         private IteratorPrototype? _iteratorPrototype;
         private MathInstance? _math;
         private JsonInstance? _json;
         private SymbolConstructor? _symbol;
+        private GeneratorFunctionConstructor? _generatorFunction;
         private RegExpConstructor? _regExp;
         private RegExpStringIteratorPrototype? _regExpStringIteratorPrototype;
         private NumberConstructor? _number;
@@ -80,6 +83,7 @@ namespace Jint.Runtime
         private ArrayIteratorPrototype? _arrayIteratorPrototype;
         private BooleanConstructor? _boolean;
         private ArrayBufferConstructor? _arrayBufferConstructor;
+        private SharedArrayBufferConstructor? _sharedArrayBufferConstructor;
         private DataViewConstructor? _dataView;
         private AsyncFunctionConstructor? _asyncFunction;
         private FinalizationRegistryConstructor? _finalizationRegistry;
@@ -94,6 +98,7 @@ namespace Jint.Runtime
         private Uint32ArrayConstructor? _uint32Array;
         private BigInt64ArrayConstructor? _bigInt64Array;
         private BigUint64ArrayConstructor? _bigUint64Array;
+        private Float16ArrayConstructor? _float16Array;
         private Float32ArrayConstructor? _float32Array;
         private Float64ArrayConstructor? _float64Array;
 
@@ -136,8 +141,11 @@ namespace Jint.Runtime
         internal DataViewConstructor DataView =>
             _dataView ??= new DataViewConstructor(_engine, _realm, Function.PrototypeObject, Object.PrototypeObject);
 
-        internal ArrayBufferConstructor ArrayBuffer =>
+        public ArrayBufferConstructor ArrayBuffer =>
             _arrayBufferConstructor ??= new ArrayBufferConstructor(_engine, _realm, Function.PrototypeObject, Object.PrototypeObject);
+
+        internal SharedArrayBufferConstructor SharedArrayBuffer =>
+            _sharedArrayBufferConstructor ??= new SharedArrayBufferConstructor(_engine, _realm, Function.PrototypeObject, Object.PrototypeObject);
 
         internal IntrinsicTypedArrayConstructor TypedArray =>
             _typedArray ??= new IntrinsicTypedArrayConstructor(_engine, _realm, Function.PrototypeObject, Object.PrototypeObject, "TypedArray");
@@ -168,6 +176,9 @@ namespace Jint.Runtime
 
         public BigUint64ArrayConstructor BigUint64Array =>
             _bigUint64Array ??= new BigUint64ArrayConstructor(_engine, _realm, TypedArray, TypedArray.PrototypeObject);
+
+        public Float16ArrayConstructor Float16Array =>
+            _float16Array ??= new Float16ArrayConstructor(_engine, _realm, TypedArray, TypedArray.PrototypeObject);
 
         public Float32ArrayConstructor Float32Array =>
             _float32Array ??= new Float32ArrayConstructor(_engine, _realm, TypedArray, TypedArray.PrototypeObject);
@@ -229,7 +240,7 @@ namespace Jint.Runtime
         internal MathInstance Math =>
             _math ??= new MathInstance(_engine, Object.PrototypeObject);
 
-        public JsonInstance Json =>
+        internal JsonInstance Json =>
             _json ??= new JsonInstance(_engine, _realm, Object.PrototypeObject);
 
         internal ProxyConstructor Proxy =>
@@ -244,8 +255,11 @@ namespace Jint.Runtime
         public ShadowRealmConstructor ShadowRealm =>
             _shadowRealm ??= new ShadowRealmConstructor(_engine, _realm, Function.PrototypeObject, Object.PrototypeObject);
 
-        internal EvalFunctionInstance Eval =>
-            _eval ??= new EvalFunctionInstance(_engine, _realm, Function.PrototypeObject);
+        internal GeneratorFunctionConstructor GeneratorFunction =>
+            _generatorFunction ??= new GeneratorFunctionConstructor(_engine, _realm, Function.PrototypeObject, IteratorPrototype);
+
+        public EvalFunction Eval =>
+            _eval ??= new EvalFunction(_engine, _realm, Function.PrototypeObject);
 
         public ErrorConstructor Error =>
             _error ??= new ErrorConstructor(_engine, _realm, Function.PrototypeObject, Object.PrototypeObject, _errorFunctionName, static intrinsics => intrinsics.Error.PrototypeObject);

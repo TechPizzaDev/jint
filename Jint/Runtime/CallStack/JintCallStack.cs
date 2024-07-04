@@ -2,12 +2,11 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text;
-using Esprima;
-using Esprima.Ast;
 using Jint.Collections;
 using Jint.Native.Function;
 using Jint.Runtime.Environments;
 using Jint.Runtime.Interpreter.Expressions;
+using Environment = Jint.Runtime.Environments.Environment;
 
 namespace Jint.Runtime.CallStack
 {
@@ -19,9 +18,9 @@ namespace Jint.Runtime.CallStack
             LexicalEnvironment = context.LexicalEnvironment;
         }
 
-        internal readonly EnvironmentRecord LexicalEnvironment;
+        internal readonly Environment LexicalEnvironment;
 
-        internal EnvironmentRecord GetThisEnvironment()
+        internal Environment GetThisEnvironment()
         {
             var lex = LexicalEnvironment;
             while (true)
@@ -56,9 +55,9 @@ namespace Jint.Runtime.CallStack
             }
         }
 
-        public int Push(FunctionInstance functionInstance, JintExpression? expression, in ExecutionContext executionContext)
+        public int Push(Function function, JintExpression? expression, in ExecutionContext executionContext)
         {
-            var item = new CallStackElement(functionInstance, expression, new CallStackExecutionContext(executionContext));
+            var item = new CallStackElement(function, expression, new CallStackExecutionContext(executionContext));
             _stack.Push(item);
             if (_statistics is not null)
             {
@@ -116,12 +115,12 @@ namespace Jint.Runtime.CallStack
             return string.Join("->", _stack.Select(static cse => cse.ToString()).Reverse());
         }
 
-        internal string BuildCallStackString(Location location, int excludeTop = 0)
+        internal string BuildCallStackString(SourceLocation location, int excludeTop = 0)
         {
             static void AppendLocation(
                 ref ValueStringBuilder sb,
                 string shortDescription,
-                in Location loc,
+                in SourceLocation loc,
                 in CallStackElement? element)
             {
                 sb.Append("   at");
@@ -150,12 +149,12 @@ namespace Jint.Runtime.CallStack
                 }
 
                 sb.Append(' ');
-                sb.Append(loc.Source);
+                sb.Append(loc.SourceFile);
                 sb.Append(':');
                 sb.Append(loc.End.Line.ToString(CultureInfo.InvariantCulture));
                 sb.Append(':');
                 sb.Append((loc.Start.Column + 1).ToString(CultureInfo.InvariantCulture)); // report column number instead of index
-                sb.Append(Environment.NewLine);
+                sb.Append(System.Environment.NewLine);
             }
 
             var builder = new ValueStringBuilder();
@@ -189,13 +188,13 @@ namespace Jint.Runtime.CallStack
         }
 
         /// <summary>
-        /// A version of <see cref="EsprimaExtensions.GetKey"/> that cannot get into loop as we are already building a stack.
+        /// A version of <see cref="AstExtensions.GetKey"/> that cannot get into loop as we are already building a stack.
         /// </summary>
         private static string GetPropertyKey(Node expression)
         {
             if (expression is Literal literal)
             {
-                return EsprimaExtensions.LiteralKeyToString(literal);
+                return AstExtensions.LiteralKeyToString(literal);
             }
 
             if (expression is Identifier identifier)
@@ -203,7 +202,7 @@ namespace Jint.Runtime.CallStack
                 return identifier.Name ?? "";
             }
 
-            if (expression is StaticMemberExpression staticMemberExpression)
+            if (expression is MemberExpression { Computed: false } staticMemberExpression)
             {
                 return GetPropertyKey(staticMemberExpression.Object) + "." +
                        GetPropertyKey(staticMemberExpression.Property);

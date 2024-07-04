@@ -65,9 +65,9 @@ namespace Jint.Native.Array
             }
         }
 
-        public sealed override bool IsArrayLike => true;
+        internal sealed override bool IsArrayLike => true;
 
-        public sealed override bool IsArray() => true;
+        internal sealed override bool IsArray() => true;
 
         internal sealed override bool HasOriginalIterator
             => ReferenceEquals(Get(GlobalSymbolRegistry.Iterator), _constructor?.PrototypeObject._originalIteratorFunction);
@@ -130,7 +130,7 @@ namespace Jint.Native.Array
         private bool DefineLength(PropertyDescriptor desc)
         {
             var value = desc.Value;
-            if (ReferenceEquals(value, null))
+            if (value is null)
             {
                 return base.DefineOwnProperty(CommonProperties.Length, desc);
             }
@@ -287,21 +287,10 @@ namespace Jint.Native.Array
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal uint GetLength() => (uint) GetJsNumberLength()._value;
+        internal override uint GetLength() => (uint) GetJsNumberLength()._value;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private JsNumber GetJsNumberLength() => _length is null ? JsNumber.PositiveZero : (JsNumber) _length._value!;
-
-        protected sealed override void AddProperty(JsValue property, PropertyDescriptor descriptor)
-        {
-            if (CommonProperties.Length.Equals(property ))
-            {
-                _length = descriptor;
-                return;
-            }
-
-            base.AddProperty(property, descriptor);
-        }
 
         protected sealed override bool TryGetProperty(JsValue property, [NotNullWhen(true)] out PropertyDescriptor? descriptor)
         {
@@ -314,9 +303,9 @@ namespace Jint.Native.Array
             return base.TryGetProperty(property, out descriptor);
         }
 
-        public sealed override List<JsValue> GetOwnPropertyKeys(Types types = Types.None | Types.String | Types.Symbol)
+        public sealed override List<JsValue> GetOwnPropertyKeys(Types types = Types.Empty | Types.String | Types.Symbol)
         {
-            if ((types & Types.String) == Types.None)
+            if ((types & Types.String) == Types.Empty)
             {
                 return base.GetOwnPropertyKeys(types);
             }
@@ -436,7 +425,7 @@ namespace Jint.Native.Array
         {
             if (!TryGetValue(index, out var value))
             {
-                value = UnwrapJsValue(Prototype?.GetProperty(JsString.Create(index)) ?? PropertyDescriptor.Undefined);
+                value = Prototype?.Get(JsString.Create(index)) ?? Undefined;
             }
 
             return value;
@@ -1267,8 +1256,6 @@ namespace Jint.Native.Array
             return false;
         }
 
-        public sealed override uint Length => GetLength();
-
         internal sealed override bool IsIntegerIndexedArray => true;
 
         public JsValue this[uint index]
@@ -1340,20 +1327,13 @@ namespace Jint.Native.Array
                 for (var i = sourceStartIndex; i < sourceStartIndex + length; ++i, j++)
                 {
                     JsValue? sourceValue;
-                    if (i < (uint) sourceDense.Length && sourceDense[i] is not null)
+                    if (i < (uint) sourceDense.Length)
                     {
                         sourceValue = sourceDense[i];
                     }
                     else
                     {
-                        if (!source.TryGetValue(i, out var temp))
-                        {
-                            sourceValue = source.Prototype?.Get(JsString.Create(i));
-                        }
-                        else
-                        {
-                            sourceValue = temp;
-                        }
+                        source.TryGetValue(i, out sourceValue);
                     }
 
                     dense[targetStartIndex + j] = sourceValue;

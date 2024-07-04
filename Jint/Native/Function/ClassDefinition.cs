@@ -1,12 +1,10 @@
-using Esprima;
-using Esprima.Ast;
-using Esprima.Utils;
 using Jint.Native.Object;
 using Jint.Runtime;
 using Jint.Runtime.Descriptors;
 using Jint.Runtime.Environments;
 using Jint.Runtime.Interpreter;
 using Jint.Runtime.Interpreter.Expressions;
+using Environment = Jint.Runtime.Environments.Environment;
 
 namespace Jint.Native.Function;
 
@@ -23,17 +21,19 @@ internal sealed class ClassDefinition
 
     static ClassDefinition()
     {
+        var parser = new Parser(Engine.BaseParserOptions);
+
         // generate missing constructor AST only once
-        static MethodDefinition CreateConstructorMethodDefinition(string source)
+        static MethodDefinition CreateConstructorMethodDefinition(Parser parser, string source)
         {
-            var script = new JavaScriptParser().ParseScript(source);
+            var script = parser.ParseScript(source);
             var classDeclaration = (ClassDeclaration) script.Body[0];
             return (MethodDefinition) classDeclaration.Body.Body[0];
         }
 
-        _superConstructor = CreateConstructorMethodDefinition("class temp { constructor(...args) { super(...args); } }");
-        _defaultSuperCall = (CallExpression) ((ExpressionStatement) _superConstructor.Value.Body.Body[0]).Expression;
-        _emptyConstructor = CreateConstructorMethodDefinition("class temp { constructor() {} }");
+        _superConstructor = CreateConstructorMethodDefinition(parser, "class temp extends X { constructor(...args) { super(...args); } }");
+        _defaultSuperCall = (CallExpression) ((NonSpecialExpressionStatement) _superConstructor.Value.Body.Body[0]).Expression;
+        _emptyConstructor = CreateConstructorMethodDefinition(parser, "class temp { constructor() {} }");
     }
 
     public ClassDefinition(
@@ -49,7 +49,7 @@ internal sealed class ClassDefinition
     /// <summary>
     /// https://tc39.es/ecma262/#sec-runtime-semantics-classdefinitionevaluation
     /// </summary>
-    public JsValue BuildConstructor(EvaluationContext context, EnvironmentRecord env)
+    public JsValue BuildConstructor(EvaluationContext context, Environment env)
     {
         // A class definition is always strict mode code.
         using var _ = new StrictModeScope(true, true);
@@ -89,7 +89,7 @@ internal sealed class ClassDefinition
             }
             else
             {
-                var temp = superclass.Get("prototype");
+                var temp = superclass.Get(CommonProperties.Prototype);
                 if (temp is ObjectInstance protoParentObject)
                 {
                     protoParent = protoParentObject;
@@ -137,7 +137,7 @@ internal sealed class ClassDefinition
         engine.UpdateLexicalEnvironment(classEnv);
         engine.UpdatePrivateEnvironment(classPrivateEnvironment);
 
-        ScriptFunctionInstance F;
+        ScriptFunction F;
         try
         {
             var constructorInfo = constructor.DefineMethod(proto, constructorParent);
@@ -155,14 +155,14 @@ internal sealed class ClassDefinition
             var instanceFields = new List<ClassFieldDefinition>();
             var staticElements = new List<object>();
 
-            foreach (var e in elements)
+            foreach (IClassElement e in elements)
             {
                 if (e is MethodDefinition { Kind: PropertyKind.Constructor })
                 {
                     continue;
                 }
 
-                var isStatic = e is MethodDefinition { Static: true } or AccessorProperty { Static: true } or PropertyDefinition { Static: true } or StaticBlock;
+                var isStatic = e.Static;
 
                 var target = !isStatic ? proto : F;
                 var element = ClassElementEvaluation(engine, target, e);
@@ -239,13 +239,14 @@ internal sealed class ClassDefinition
     /// <summary>
     /// https://tc39.es/ecma262/#sec-static-semantics-classelementevaluation
     /// </summary>
-    private static object? ClassElementEvaluation(Engine engine, ObjectInstance target, ClassElement e)
+    private static object? ClassElementEvaluation(Engine engine, ObjectInstance target, IClassElement e)
     {
         return e switch
         {
             PropertyDefinition p => ClassFieldDefinitionEvaluation(engine, target, p),
             MethodDefinition m => MethodDefinitionEvaluation(engine, target, m, enumerable: false),
             StaticBlock s => ClassStaticBlockDefinitionEvaluation(engine, target, s),
+            // AccessorProperty ap => throw new NotImplementedException(), // not implemented yet
             _ => null
         };
     }
@@ -257,7 +258,7 @@ internal sealed class ClassDefinition
     {
         var name = fieldDefinition.GetKey(engine);
 
-        ScriptFunctionInstance? initializer = null;
+        ScriptFunction? initializer = null;
         if (fieldDefinition.Value is not null)
         {
             var intrinsics = engine.Realm.Intrinsics;
@@ -277,12 +278,12 @@ internal sealed class ClassDefinition
     private sealed class ClassFieldFunction : Node, IFunction
     {
         private readonly NodeList<Node> _nodeList;
-        private readonly BlockStatement _statement;
+        private readonly FunctionBody _statement;
 
-        public ClassFieldFunction(Expression expression) : base(Nodes.ExpressionStatement)
+        public ClassFieldFunction(Expression expression) : base(NodeType.ExpressionStatement)
         {
-            var nodeList = NodeList.Create<Statement>(new[] { new ReturnStatement(expression) });
-            _statement = new BlockStatement(nodeList);
+            var nodeList = NodeList.From<Statement>(new ReturnStatement(expression));
+            _statement = new FunctionBody(nodeList, strict: true);
         }
 
         protected override object Accept(AstVisitor visitor) => throw new NotImplementedException();
@@ -291,10 +292,9 @@ internal sealed class ClassDefinition
 
         public ref readonly NodeList<Node> Params => ref _nodeList;
 
-        public StatementListItem Body => _statement;
+        public StatementOrExpression Body => _statement;
         public bool Generator => false;
         public bool Expression => false;
-        public bool Strict => true;
         public bool Async => false;
     }
 
@@ -319,12 +319,12 @@ internal sealed class ClassDefinition
 
     private sealed class ClassStaticBlockFunction : Node, IFunction
     {
-        private readonly BlockStatement _statement;
+        private readonly FunctionBody _statement;
         private readonly NodeList<Node> _params;
 
-        public ClassStaticBlockFunction(StaticBlock staticBlock) : base(Nodes.StaticBlock)
+        public ClassStaticBlockFunction(StaticBlock staticBlock) : base(NodeType.StaticBlock)
         {
-            _statement = new BlockStatement(staticBlock.Body);
+            _statement = new FunctionBody(staticBlock.Body, strict: true);
             _params = new NodeList<Node>();
         }
 
@@ -332,33 +332,32 @@ internal sealed class ClassDefinition
 
         public Identifier? Id => null;
         public ref readonly NodeList<Node> Params => ref _params;
-        public StatementListItem Body => _statement;
+        public StatementOrExpression Body => _statement;
         public bool Generator => false;
         public bool Expression => false;
-        public bool Strict => false;
         public bool Async => false;
     }
 
     /// <summary>
     /// https://tc39.es/ecma262/#sec-runtime-semantics-methoddefinitionevaluation
     /// </summary>
-    private static PrivateElement? MethodDefinitionEvaluation(
+    internal static PrivateElement? MethodDefinitionEvaluation<T>(
         Engine engine,
         ObjectInstance obj,
-        MethodDefinition method,
-        bool enumerable)
+        T method,
+        bool enumerable) where T : IProperty
     {
-        if (method.Kind != PropertyKind.Get && method.Kind != PropertyKind.Set)
-        {
-            var methodDef = method.DefineMethod(obj);
-            methodDef.Closure.SetFunctionName(methodDef.Key);
-            return DefineMethodProperty(obj, methodDef.Key, methodDef.Closure, enumerable);
-        }
-
         var function = method.Value as IFunction;
         if (function is null)
         {
             ExceptionHelper.ThrowSyntaxError(obj.Engine.Realm);
+        }
+
+        if (method.Kind != PropertyKind.Get && method.Kind != PropertyKind.Set && !function.Generator)
+        {
+            var methodDef = method.DefineMethod(obj);
+            methodDef.Closure.SetFunctionName(methodDef.Key);
+            return DefineMethodProperty(obj, methodDef.Key, methodDef.Closure, enumerable);
         }
 
         var getter = method.Kind == PropertyKind.Get;
@@ -371,27 +370,39 @@ internal sealed class ClassDefinition
         var env = engine.ExecutionContext.LexicalEnvironment;
         var privateEnv = engine.ExecutionContext.PrivateEnvironment;
 
-        var closure = intrinsics.Function.OrdinaryFunctionCreate(intrinsics.Function.PrototypeObject, definition, definition.ThisMode, env, privateEnv);
-        closure.MakeMethod(obj);
-        closure.SetFunctionName(propKey, getter ? "get" : "set");
-
-        if (method.Key is PrivateIdentifier privateIdentifier)
+        if (function.Generator)
         {
-            return new PrivateElement
-            {
-                Key = privateEnv!.Names[privateIdentifier],
-                Kind = PrivateElementKind.Accessor,
-                Get = getter ? closure : null,
-                Set = !getter ? closure : null
-            };
+            var closure = intrinsics.Function.OrdinaryFunctionCreate(intrinsics.GeneratorFunction.PrototypeObject, definition, definition.ThisMode, env, privateEnv);
+            closure.MakeMethod(obj);
+            closure.SetFunctionName(propKey);
+            var prototype = ObjectInstance.OrdinaryObjectCreate(engine, intrinsics.GeneratorFunction.PrototypeObject.PrototypeObject);
+            closure.DefinePropertyOrThrow(CommonProperties.Prototype, new PropertyDescriptor(prototype, PropertyFlag.Writable));
+            return DefineMethodProperty(obj, propKey, closure, enumerable);
         }
+        else
+        {
+            var closure = intrinsics.Function.OrdinaryFunctionCreate(intrinsics.Function.PrototypeObject, definition, definition.ThisMode, env, privateEnv);
+            closure.MakeMethod(obj);
+            closure.SetFunctionName(propKey, getter ? "get" : "set");
 
-        var propDesc = new GetSetPropertyDescriptor(
-            getter ? closure : null,
-            !getter ? closure : null,
-            PropertyFlag.Configurable);
+            if (method.Key is PrivateIdentifier privateIdentifier)
+            {
+                return new PrivateElement
+                {
+                    Key = privateEnv!.Names[privateIdentifier],
+                    Kind = PrivateElementKind.Accessor,
+                    Get = getter ? closure : null,
+                    Set = !getter ? closure : null
+                };
+            }
 
-        obj.DefinePropertyOrThrow(propKey, propDesc);
+            var propDesc = new GetSetPropertyDescriptor(
+                getter ? closure : null,
+                !getter ? closure : null,
+                PropertyFlag.Configurable);
+
+            obj.DefinePropertyOrThrow(propKey, propDesc);
+        }
 
         return null;
     }
@@ -399,14 +410,14 @@ internal sealed class ClassDefinition
     /// <summary>
     /// https://tc39.es/ecma262/#sec-definemethodproperty
     /// </summary>
-    private static PrivateElement? DefineMethodProperty(ObjectInstance homeObject, JsValue key, ScriptFunctionInstance closure, bool enumerable)
+    private static PrivateElement? DefineMethodProperty(ObjectInstance homeObject, JsValue key, ScriptFunction closure, bool enumerable)
     {
         if (key.IsPrivateName())
         {
             return new PrivateElement { Key = (PrivateName) key, Kind = PrivateElementKind.Method, Value = closure };
         }
 
-        var desc = new PropertyDescriptor(closure, enumerable ? PropertyFlag.Enumerable : PropertyFlag.NonEnumerable);
+        var desc = new PropertyDescriptor(closure, enumerable ? PropertyFlag.ConfigurableEnumerableWritable : PropertyFlag.NonEnumerable);
         homeObject.DefinePropertyOrThrow(key, desc);
         return null;
     }

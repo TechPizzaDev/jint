@@ -1,8 +1,9 @@
 using System.Collections;
 using Jint.Native.Number;
 using Jint.Native.Object;
-using Jint.Native.TypedArray;
+using Jint.Native.String;
 using Jint.Runtime;
+using Jint.Runtime.Interop;
 
 namespace Jint.Native.Array
 {
@@ -11,25 +12,56 @@ namespace Jint.Native.Array
         protected internal const ulong MaxArrayLength = 4294967295;
         protected internal const ulong MaxArrayLikeLength = NumberConstructor.MaxSafeInteger;
 
-        public static ArrayOperations For(ObjectInstance instance)
+        public static ArrayOperations For(Realm realm, JsValue value, bool forWrite)
+        {
+            if (!forWrite)
+            {
+                if (value.IsString())
+                {
+                    return new JsStringOperations(realm, (JsString) value);
+                }
+
+                if (value is StringInstance stringInstance)
+                {
+                    return new JsStringOperations(realm, stringInstance);
+                }
+
+                if (value is JsArray { CanUseFastAccess: true } array && array.Length <= (array._dense?.Length ?? -1))
+                {
+                    return new ArrayReadOperations(array);
+                }
+            }
+
+            return For(TypeConverter.ToObject(realm, value), forWrite);
+        }
+
+        public static ArrayOperations For(ObjectInstance instance, bool forWrite)
         {
             if (instance is JsArray { CanUseFastAccess: true } arrayInstance)
             {
-                return new ArrayInstanceOperations(arrayInstance);
+                return new JsArrayOperations(arrayInstance);
             }
 
             if (instance is JsTypedArray typedArrayInstance)
             {
-                return new TypedArrayInstanceOperations(typedArrayInstance);
+                return new JsTypedArrayOperations(typedArrayInstance);
             }
 
-            return new ObjectInstanceOperations(instance);
-        }
+            if (instance is ArrayLikeWrapper arrayWrapper)
+            {
+                return new ArrayLikeOperations(arrayWrapper);
+            }
 
-        public static ArrayOperations For(Realm realm, JsValue thisObj)
-        {
-            var instance = TypeConverter.ToObject(realm, thisObj);
-            return For(instance);
+            if (instance is ObjectWrapper wrapper)
+            {
+                var descriptor = wrapper._typeDescriptor;
+                if (descriptor.IsArrayLike && wrapper.Target is ICollection)
+                {
+                    return new IndexWrappedOperations(wrapper);
+                }
+            }
+
+            return new ObjectOperations(instance);
         }
 
         public abstract ObjectInstance Target { get; }
@@ -56,7 +88,7 @@ namespace Jint.Native.Array
             for (uint i = 0; i < (uint) jsValues.Length; i++)
             {
                 var jsValue = skipHoles && !HasProperty(i) ? JsValue.Undefined : Get(i);
-                if ((jsValue.Type & elementTypes) == Types.None)
+                if ((jsValue.Type & elementTypes) == Types.Empty)
                 {
                     ExceptionHelper.ThrowTypeErrorNoEngine("invalid type");
                 }
@@ -104,7 +136,9 @@ namespace Jint.Native.Array
                 {
                     return !_initialized
                         ? JsValue.Undefined
-                        : _obj.TryGetValue(_current, out var temp) ? temp : JsValue.Undefined;
+                        : _obj.TryGetValue(_current, out var temp)
+                            ? temp
+                            : JsValue.Undefined;
                 }
             }
 
@@ -135,16 +169,16 @@ namespace Jint.Native.Array
             }
         }
 
-        private sealed class ObjectInstanceOperations : ArrayOperations<ObjectInstance>
+        private sealed class ObjectOperations : ArrayOperations<ObjectInstance>
         {
-            public ObjectInstanceOperations(ObjectInstance target) : base(target)
+            public ObjectOperations(ObjectInstance target) : base(target)
             {
             }
 
             private double GetIntegerLength()
             {
                 var descValue = _target.Get(CommonProperties.Length);
-                if (!ReferenceEquals(descValue, null))
+                if (descValue is not null)
                 {
                     return TypeConverter.ToInteger(descValue);
                 }
@@ -204,9 +238,9 @@ namespace Jint.Native.Array
             public override bool HasProperty(ulong index) => Target.HasProperty(index);
         }
 
-        private sealed class ArrayInstanceOperations : ArrayOperations<JsArray>
+        private sealed class JsArrayOperations : ArrayOperations<JsArray>
         {
-            public ArrayInstanceOperations(JsArray target) : base(target)
+            public JsArrayOperations(JsArray target) : base(target)
             {
             }
 
@@ -251,7 +285,7 @@ namespace Jint.Native.Array
                         value = _target.Prototype?.Get(i) ?? JsValue.Undefined;
                     }
 
-                    if ((value.Type & elementTypes) == Types.None)
+                    if ((value.Type & elementTypes) == Types.Empty)
                     {
                         ExceptionHelper.ThrowTypeErrorNoEngine("invalid type");
                     }
@@ -274,11 +308,11 @@ namespace Jint.Native.Array
             public override bool HasProperty(ulong index) => _target.HasProperty(index);
         }
 
-        private sealed class TypedArrayInstanceOperations : ArrayOperations
+        private sealed class JsTypedArrayOperations : ArrayOperations
         {
             private readonly JsTypedArray _target;
 
-            public TypedArrayInstanceOperations(JsTypedArray target)
+            public JsTypedArrayOperations(JsTypedArray target)
             {
                 _target = target;
             }
@@ -291,11 +325,11 @@ namespace Jint.Native.Array
             {
                 if (!_target.IsConcatSpreadable)
                 {
-                    return _target.Length;
+                    return _target.GetLength();
                 }
 
                 var descValue = _target.Get(CommonProperties.Length);
-                if (!ReferenceEquals(descValue, null))
+                if (descValue is not null)
                 {
                     return (uint) TypeConverter.ToInteger(descValue);
                 }
@@ -317,7 +351,7 @@ namespace Jint.Native.Array
 
             public override bool TryGetValue(ulong index, out JsValue value)
             {
-                if (index < _target.Length)
+                if (index < _target.GetLength())
                 {
                     value = _target[(int) index];
                     return true;
@@ -339,6 +373,268 @@ namespace Jint.Native.Array
             public override bool HasProperty(ulong index) => _target.HasProperty(index);
         }
 
+        private sealed class JsStringOperations : ArrayOperations
+        {
+            private readonly Realm _realm;
+            private readonly JsString _target;
+            private ObjectInstance? _wrappedTarget;
+
+            public JsStringOperations(Realm realm, JsString target)
+            {
+                _realm = realm;
+                _target = target;
+            }
+
+            public JsStringOperations(Realm realm, StringInstance stringInstance) : this(realm, stringInstance.StringData)
+            {
+                _wrappedTarget = stringInstance;
+            }
+
+            public override ObjectInstance Target => _wrappedTarget ??= _realm.Intrinsics.String.Construct(_target);
+
+            public override ulong GetSmallestIndex(ulong length) => 0;
+
+            public override uint GetLength() => (uint) _target.Length;
+
+            public override ulong GetLongLength() => GetLength();
+
+            public override void SetLength(ulong length) => throw new NotSupportedException();
+
+            public override void EnsureCapacity(ulong capacity)
+            {
+            }
+
+            public override JsValue Get(ulong index) => index < (ulong) _target.Length ? _target[(int) index] : JsValue.Undefined;
+
+            public override bool TryGetValue(ulong index, out JsValue value)
+            {
+                if (index < (ulong) _target.Length)
+                {
+                    value = _target[(int) index];
+                    return true;
+                }
+
+                value = JsValue.Undefined;
+                return false;
+            }
+
+            public override bool HasProperty(ulong index) => index < (ulong) _target.Length;
+
+            public override void CreateDataPropertyOrThrow(ulong index, JsValue value) => throw new NotSupportedException();
+
+            public override void Set(ulong index, JsValue value, bool updateLength = false, bool throwOnError = true) => throw new NotSupportedException();
+
+            public override void DeletePropertyOrThrow(ulong index) => throw new NotSupportedException();
+        }
+
+        private sealed class ArrayReadOperations : ArrayOperations
+        {
+            private readonly JsArray _target;
+            private readonly JsValue?[] _data;
+            private readonly uint _length;
+
+            public ArrayReadOperations(JsArray target)
+            {
+                _target = target;
+                _data = target._dense ?? System.Array.Empty<JsValue>();
+                _length = target.Length;
+            }
+
+            public override ObjectInstance Target => _target;
+
+            public override ulong GetSmallestIndex(ulong length) => 0;
+
+            public override uint GetLength() => _length;
+
+            public override ulong GetLongLength() => _length;
+
+            public override void SetLength(ulong length) => throw new NotSupportedException();
+
+            public override void EnsureCapacity(ulong capacity)
+            {
+            }
+
+            public override JsValue Get(ulong index) => (index < (ulong) _data.Length ? _data[(int) index] : JsValue.Undefined) ?? JsValue.Undefined;
+
+            public override bool TryGetValue(ulong index, out JsValue value)
+            {
+                if (index < _length)
+                {
+                    value = _data[(int) index]!;
+                    return value is not null;
+                }
+
+                value = JsValue.Undefined;
+                return false;
+            }
+
+            public override bool HasProperty(ulong index) => index < _length && _data[index] is not null;
+
+            public override void CreateDataPropertyOrThrow(ulong index, JsValue value) => throw new NotSupportedException();
+
+            public override void Set(ulong index, JsValue value, bool updateLength = false, bool throwOnError = true) => throw new NotSupportedException();
+
+            public override void DeletePropertyOrThrow(ulong index) => throw new NotSupportedException();
+        }
+
+        private sealed class IndexWrappedOperations : ArrayOperations
+        {
+            private readonly ObjectWrapper _target;
+            private readonly ICollection _collection;
+            private readonly IList _list;
+
+            public IndexWrappedOperations(ObjectWrapper wrapper)
+            {
+                _target = wrapper;
+                _collection = (ICollection) wrapper.Target;
+                _list = (IList) wrapper.Target;
+            }
+
+            public override ObjectInstance Target => _target;
+
+            public override ulong GetSmallestIndex(ulong length) => 0;
+
+            public override uint GetLength() => (uint) _collection.Count;
+
+            public override ulong GetLongLength() => GetLength();
+
+            public override void SetLength(ulong length)
+            {
+                if (_list == null)
+                {
+                    throw new NotSupportedException();
+                }
+                
+                while (_list.Count > (int) length)
+                {
+                    // shrink list to fit
+                    _list.RemoveAt(_list.Count - 1);
+                }
+                
+                while (_list.Count < (int) length)
+                {
+                    // expand list to fit
+                    _list.Add(null);
+                }
+            }
+
+            public override void EnsureCapacity(ulong capacity)
+            {
+            }
+
+            public override JsValue Get(ulong index) => index < (ulong) _collection.Count ? ReadValue((int) index) : JsValue.Undefined;
+
+            public override bool TryGetValue(ulong index, out JsValue value)
+            {
+                if (index < (ulong) _collection.Count)
+                {
+                    value = ReadValue((int) index);
+                    return true;
+                }
+
+                value = JsValue.Undefined;
+                return false;
+            }
+
+            private JsValue ReadValue(int index)
+            {
+                if (_list is not null)
+                {
+                    return (uint) index < _list.Count ? JsValue.FromObject(_target.Engine, _list[index]) : JsValue.Undefined;
+                }
+
+                // via reflection is slow, but better than nothing
+                return JsValue.FromObject(_target.Engine, _target._typeDescriptor.IntegerIndexerProperty!.GetValue(Target, [index]));
+            }
+
+            public override bool HasProperty(ulong index) => index < (ulong) _collection.Count;
+
+            public override void CreateDataPropertyOrThrow(ulong index, JsValue value)
+                => _target.CreateDataPropertyOrThrow(index, value);
+
+            public override void Set(ulong index, JsValue value, bool updateLength = false, bool throwOnError = true)
+            {
+                if (updateLength && _list != null && index >= (ulong) _list.Count)
+                {
+                    SetLength(index + 1);
+                }
+                
+                _target[(int) index] = value;
+            }
+
+            public override void DeletePropertyOrThrow(ulong index)
+                => _target.DeletePropertyOrThrow(index);
+        }
+
+        private sealed class ArrayLikeOperations : ArrayOperations
+        {
+            private readonly ArrayLikeWrapper _target;
+
+            public ArrayLikeOperations(ArrayLikeWrapper wrapper)
+            {
+                _target = wrapper;
+            }
+
+            public override ObjectInstance Target => _target;
+
+            public override ulong GetSmallestIndex(ulong length) => 0;
+
+            public override uint GetLength() => (uint) _target.Length;
+
+            public override ulong GetLongLength() => GetLength();
+
+            public override void SetLength(ulong length)
+            {
+                while (_target.Length > (int) length)
+                {
+                    // shrink list to fit
+                    _target.RemoveAt(_target.Length - 1);
+                }
+                
+                while (_target.Length < (int) length)
+                {
+                    // expand list to fit
+                    _target.AddDefault();
+                }
+            }
+
+            public override void EnsureCapacity(ulong capacity)
+            {
+                _target.EnsureCapacity((int)capacity);
+            }
+
+            public override JsValue Get(ulong index) => index < (ulong) _target.Length ? ReadValue((int) index) : JsValue.Undefined;
+
+            public override bool TryGetValue(ulong index, out JsValue value)
+            {
+                if (index < (ulong) _target.Length)
+                {
+                    value = ReadValue((int) index);
+                    return true;
+                }
+
+                value = JsValue.Undefined;
+                return false;
+            }
+
+            private JsValue ReadValue(int index)
+            {
+                return (uint) index < _target.Length ? JsValue.FromObject(_target.Engine, _target.GetAt(index)) : JsValue.Undefined;
+            }
+
+            public override bool HasProperty(ulong index) => index < (ulong) _target.Length;
+
+            public override void CreateDataPropertyOrThrow(ulong index, JsValue value)
+                => _target.CreateDataPropertyOrThrow(index, value);
+
+            public override void Set(ulong index, JsValue value, bool updateLength = false, bool throwOnError = true)
+            {
+                _target.SetAt((int)index, value);
+            }
+
+            public override void DeletePropertyOrThrow(ulong index)
+                => _target.DeletePropertyOrThrow(index);
+        }
     }
 
     /// <summary>

@@ -38,9 +38,9 @@ namespace Jint.Native.String
         {
             var properties = new PropertyDictionary(3, checkExistingKeys: false)
             {
-                ["fromCharCode"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunctionInstance(Engine, "fromCharCode", FromCharCode, 1), PropertyFlag.NonEnumerable)),
-                ["fromCodePoint"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunctionInstance(Engine, "fromCodePoint", FromCodePoint, 1, PropertyFlag.Configurable), PropertyFlag.NonEnumerable)),
-                ["raw"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunctionInstance(Engine, "raw", Raw, 1, PropertyFlag.Configurable), PropertyFlag.NonEnumerable))
+                ["fromCharCode"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunction(Engine, "fromCharCode", FromCharCode, 1), PropertyFlag.NonEnumerable)),
+                ["fromCodePoint"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunction(Engine, "fromCodePoint", FromCodePoint, 1, PropertyFlag.Configurable), PropertyFlag.NonEnumerable)),
+                ["raw"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunction(Engine, "raw", Raw, 1, PropertyFlag.Configurable), PropertyFlag.NonEnumerable))
             };
             SetProperties(properties);
         }
@@ -125,7 +125,7 @@ namespace Jint.Native.String
 
             rangeError:
             _engine.SignalError(ExceptionHelper.CreateRangeError(_realm, "Invalid code point " + codePoint));
-            return null!;
+            return JsEmpty.Instance;
         }
 
         /// <summary>
@@ -134,9 +134,8 @@ namespace Jint.Native.String
         private JsValue Raw(JsValue thisObject, JsValue[] arguments)
         {
             var cooked = TypeConverter.ToObject(_realm, arguments.At(0));
-            var raw = TypeConverter.ToObject(_realm, cooked.Get(JintTaggedTemplateExpression.PropertyRaw));
-
-            var operations = ArrayOperations.For(raw);
+            var raw = cooked.Get(JintTaggedTemplateExpression.PropertyRaw);
+            var operations = ArrayOperations.For(_realm, raw, forWrite: false);
             var length = operations.GetLength();
 
             if (length <= 0)
@@ -202,11 +201,6 @@ namespace Jint.Native.String
             }
 
             return StringCreate(s, GetPrototypeFromConstructor(newTarget, static intrinsics => intrinsics.String.PrototypeObject));
-        }
-
-        public StringInstance Construct(string value)
-        {
-            return Construct(JsString.Create(value));
         }
 
         public StringInstance Construct(JsString value)

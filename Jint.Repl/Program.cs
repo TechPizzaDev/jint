@@ -1,10 +1,11 @@
-﻿using System.Diagnostics;
-using System.Reflection;
-using Esprima;
+﻿using System.Reflection;
 using Jint;
 using Jint.Native;
 using Jint.Native.Json;
 using Jint.Runtime;
+
+#pragma warning disable IL2026
+#pragma warning disable IL2111
 
 var engine = new Engine(cfg => cfg
     .AllowClr()
@@ -30,8 +31,7 @@ if (!string.IsNullOrEmpty(filename))
 }
 
 var assembly = Assembly.GetExecutingAssembly();
-var fvi = FileVersionInfo.GetVersionInfo(assembly.Location);
-var version = fvi.FileVersion;
+var version = assembly.GetName().Version?.ToString();
 
 Console.WriteLine("Welcome to Jint ({0})", version);
 Console.WriteLine("Type 'exit' to leave, " +
@@ -40,10 +40,9 @@ Console.WriteLine("Type 'exit' to leave, " +
 Console.WriteLine();
 
 var defaultColor = Console.ForegroundColor;
-var parserOptions = new ParserOptions
+var parsingOptions = new ScriptParsingOptions
 {
     Tolerant = true,
-    RegExpParseMode = RegExpParseMode.AdaptToInterpreted
 };
 
 var serializer = new JsonSerializer(engine);
@@ -60,9 +59,9 @@ while (true)
 
     try
     {
-        var result = engine.Evaluate(input, parserOptions);
+        var result = engine.Evaluate(input, parsingOptions);
         JsValue str = result;
-        if (!result.IsPrimitive() && result is not IPrimitiveInstance)
+        if (!result.IsPrimitive() && result is not IJsPrimitive)
         {
             str = serializer.Serialize(result, JsValue.Undefined, "  ");
             if (str == JsValue.Undefined)

@@ -1,10 +1,8 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Native.Iterator;
 using Jint.Native.Number;
-using Jint.Runtime.References;
 
 namespace Jint.Runtime.Interpreter.Expressions
 {
@@ -31,7 +29,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                 return (JsValue) result;
             }
 
-            return context.Engine.GetValue(reference, true);
+            return context.Engine.GetValue(reference, returnReferenceToPool: true);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining | (MethodImplOptions) 512)]
@@ -66,7 +64,7 @@ namespace Jint.Runtime.Interpreter.Expressions
             {
                 if (expression is Literal literal)
                 {
-                    return EsprimaExtensions.LiteralKeyToString(literal);
+                    return AstExtensions.LiteralKeyToString(literal);
                 }
 
                 if (expression is Identifier identifier)
@@ -91,43 +89,49 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         protected internal static JintExpression Build(Expression expression)
         {
+            if (expression.UserData is JintExpression preparedExpression)
+            {
+                return preparedExpression;
+            }
+
             var result = expression.Type switch
             {
-                Nodes.AssignmentExpression => JintAssignmentExpression.Build((AssignmentExpression) expression),
-                Nodes.ArrayExpression => JintArrayExpression.Build((ArrayExpression) expression),
-                Nodes.ArrowFunctionExpression => new JintArrowFunctionExpression((ArrowFunctionExpression) expression),
-                Nodes.BinaryExpression => JintBinaryExpression.Build((BinaryExpression) expression),
-                Nodes.CallExpression => new JintCallExpression((CallExpression) expression),
-                Nodes.ConditionalExpression => new JintConditionalExpression((ConditionalExpression) expression),
-                Nodes.FunctionExpression => new JintFunctionExpression((FunctionExpression) expression),
-                Nodes.Identifier => new JintIdentifierExpression((Identifier) expression),
-                Nodes.PrivateIdentifier => new JintPrivateIdentifierExpression((PrivateIdentifier) expression),
-                Nodes.Literal => JintLiteralExpression.Build((Literal) expression),
-                Nodes.LogicalExpression => ((BinaryExpression) expression).Operator switch
+                NodeType.AssignmentExpression => JintAssignmentExpression.Build((AssignmentExpression) expression),
+                NodeType.ArrayExpression => JintArrayExpression.Build((ArrayExpression) expression),
+                NodeType.ArrowFunctionExpression => new JintArrowFunctionExpression((ArrowFunctionExpression) expression),
+                NodeType.BinaryExpression => JintBinaryExpression.Build((NonLogicalBinaryExpression) expression),
+                NodeType.CallExpression => new JintCallExpression((CallExpression) expression),
+                NodeType.ConditionalExpression => new JintConditionalExpression((ConditionalExpression) expression),
+                NodeType.FunctionExpression => new JintFunctionExpression((FunctionExpression) expression),
+                NodeType.Identifier => new JintIdentifierExpression((Identifier) expression),
+                NodeType.PrivateIdentifier => new JintPrivateIdentifierExpression((PrivateIdentifier) expression),
+                NodeType.Literal => JintLiteralExpression.Build((Literal) expression),
+                NodeType.LogicalExpression => ((LogicalExpression) expression).Operator switch
                 {
-                    BinaryOperator.LogicalAnd => new JintLogicalAndExpression((BinaryExpression) expression),
-                    BinaryOperator.LogicalOr => new JintLogicalOrExpression((BinaryExpression) expression),
-                    BinaryOperator.NullishCoalescing => new NullishCoalescingExpression((BinaryExpression) expression),
+                    Operator.LogicalAnd => new JintLogicalAndExpression((LogicalExpression) expression),
+                    Operator.LogicalOr => new JintLogicalOrExpression((LogicalExpression) expression),
+                    Operator.NullishCoalescing => new NullishCoalescingExpression((LogicalExpression) expression),
                     _ => null
                 },
-                Nodes.MemberExpression => new JintMemberExpression((MemberExpression) expression),
-                Nodes.NewExpression => new JintNewExpression((NewExpression) expression),
-                Nodes.ObjectExpression => JintObjectExpression.Build((ObjectExpression) expression),
-                Nodes.SequenceExpression => new JintSequenceExpression((SequenceExpression) expression),
-                Nodes.ThisExpression => new JintThisExpression((ThisExpression) expression),
-                Nodes.UpdateExpression => new JintUpdateExpression((UpdateExpression) expression),
-                Nodes.UnaryExpression => JintUnaryExpression.Build((UnaryExpression) expression),
-                Nodes.SpreadElement => new JintSpreadExpression((SpreadElement) expression),
-                Nodes.TemplateLiteral => new JintTemplateLiteralExpression((TemplateLiteral) expression),
-                Nodes.TaggedTemplateExpression => new JintTaggedTemplateExpression((TaggedTemplateExpression) expression),
-                Nodes.ClassExpression => new JintClassExpression((ClassExpression) expression),
-                Nodes.ImportExpression => new JintImportExpression((ImportExpression) expression),
-                Nodes.Super => new JintSuperExpression((Super) expression),
-                Nodes.MetaProperty => new JintMetaPropertyExpression((MetaProperty) expression),
-                Nodes.ChainExpression => ((ChainExpression) expression).Expression.Type == Nodes.CallExpression
+                NodeType.MemberExpression => new JintMemberExpression((MemberExpression) expression),
+                NodeType.NewExpression => new JintNewExpression((NewExpression) expression),
+                NodeType.ObjectExpression => JintObjectExpression.Build((ObjectExpression) expression),
+                NodeType.SequenceExpression => new JintSequenceExpression((SequenceExpression) expression),
+                NodeType.ThisExpression => new JintThisExpression((ThisExpression) expression),
+                NodeType.UpdateExpression => new JintUpdateExpression((UpdateExpression) expression),
+                NodeType.UnaryExpression => JintUnaryExpression.Build((NonUpdateUnaryExpression) expression),
+                NodeType.SpreadElement => new JintSpreadExpression((SpreadElement) expression),
+                NodeType.TemplateLiteral => new JintTemplateLiteralExpression((TemplateLiteral) expression),
+                NodeType.TaggedTemplateExpression => new JintTaggedTemplateExpression((TaggedTemplateExpression) expression),
+                NodeType.ClassExpression => new JintClassExpression((ClassExpression) expression),
+                NodeType.ImportExpression => new JintImportExpression((ImportExpression) expression),
+                NodeType.Super => new JintSuperExpression((Super) expression),
+                NodeType.MetaProperty => new JintMetaPropertyExpression((MetaProperty) expression),
+                NodeType.ChainExpression => ((ChainExpression) expression).Expression.Type == NodeType.CallExpression
                     ? new JintCallExpression((CallExpression) ((ChainExpression) expression).Expression)
                     : new JintMemberExpression((MemberExpression) ((ChainExpression) expression).Expression),
-                Nodes.AwaitExpression => new JintAwaitExpression((AwaitExpression) expression),
+                NodeType.AwaitExpression => new JintAwaitExpression((AwaitExpression) expression),
+                NodeType.YieldExpression => new JintYieldExpression((YieldExpression) expression),
                 _ =>  null
             };
 

@@ -1,4 +1,3 @@
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Runtime.Interpreter.Expressions;
 
@@ -26,7 +25,7 @@ internal sealed class JintDoWhileStatement : JintStatement<DoWhileStatement>
 
     protected override Completion ExecuteInternal(EvaluationContext context)
     {
-        var debugHandler = context.DebugMode ? context.Engine.DebugHandler : null;
+        var debugHandler = context.DebugMode ? context.Engine.Debugger : null;
 
         JsValue v = JsValue.Undefined;
         bool iterating;
@@ -34,7 +33,7 @@ internal sealed class JintDoWhileStatement : JintStatement<DoWhileStatement>
         do
         {
             var completion = _body.Execute(context);
-            if (!ReferenceEquals(completion.Value, null))
+            if (!completion.Value.IsEmpty)
             {
                 v = completion.Value;
             }

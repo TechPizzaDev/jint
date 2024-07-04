@@ -1,20 +1,24 @@
+using Jint.Native.ArrayBuffer;
 using Jint.Runtime;
 
 namespace Jint.Native.TypedArray;
 
 internal static class TypeArrayHelper
 {
-    internal static JsTypedArray ValidateTypedArray(this JsValue o, Realm realm)
+    internal static IntrinsicTypedArrayPrototype.TypedArrayWithBufferWitnessRecord ValidateTypedArray(this JsValue o, Realm realm, ArrayBufferOrder order = ArrayBufferOrder.Unordered)
     {
-        var typedArrayInstance = o as JsTypedArray;
-        if (typedArrayInstance is null)
+        if (o is not JsTypedArray typedArray)
         {
             ExceptionHelper.ThrowTypeError(realm);
+            return default;
         }
 
-        var buffer = typedArrayInstance._viewedArrayBuffer;
-        buffer.AssertNotDetached();
+        var taRecord = IntrinsicTypedArrayPrototype.MakeTypedArrayWithBufferWitnessRecord(typedArray, order);
+        if (taRecord.IsTypedArrayOutOfBounds)
+        {
+            ExceptionHelper.ThrowTypeError(realm, "TypedArray is out of bounds");
+        }
 
-        return typedArrayInstance;
+        return taRecord;
     }
 }

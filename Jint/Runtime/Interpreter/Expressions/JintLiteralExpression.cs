@@ -1,6 +1,4 @@
-using System.Numerics;
-using Esprima;
-using Esprima.Ast;
+using System.Text.RegularExpressions;
 using Jint.Native;
 
 namespace Jint.Runtime.Interpreter.Expressions
@@ -15,7 +13,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         internal static JintExpression Build(Literal expression)
         {
-            var value = expression.AssociatedData ??= ConvertToJsValue(expression) ?? _nullMarker;
+            var value = expression.UserData ??= ConvertToJsValue(expression) ?? _nullMarker;
 
             if (value is JsValue constant)
             {
@@ -27,35 +25,27 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         internal static JsValue? ConvertToJsValue(Literal literal)
         {
-            if (literal.TokenType == TokenType.BooleanLiteral)
+            switch (literal.Kind)
             {
-                return literal.BooleanValue!.Value ? JsBoolean.True : JsBoolean.False;
-            }
-
-            if (literal.TokenType == TokenType.NullLiteral)
-            {
-                return JsValue.Null;
-            }
-
-            if (literal.TokenType == TokenType.NumericLiteral)
-            {
-                // unbox only once
-                var numericValue = (double) literal.Value!;
-                var intValue = (int) numericValue;
-                return numericValue == intValue
-                       && (intValue != 0 || BitConverter.DoubleToInt64Bits(numericValue) != JsNumber.NegativeZeroBits)
-                    ? JsNumber.Create(intValue)
-                    : JsNumber.Create(numericValue);
-            }
-
-            if (literal.TokenType == TokenType.StringLiteral)
-            {
-                return JsString.Create((string) literal.Value!);
-            }
-
-            if (literal.TokenType == TokenType.BigIntLiteral)
-            {
-                return JsBigInt.Create((BigInteger) literal.Value!);
+                case TokenKind.BooleanLiteral:
+                    return ((BooleanLiteral) literal).Value ? JsBoolean.True : JsBoolean.False;
+                case TokenKind.NullLiteral:
+                    return JsValue.Null;
+                case TokenKind.NumericLiteral:
+                    {
+                        var numericValue = ((NumericLiteral) literal).Value;
+                        var intValue = (int) numericValue;
+                        return numericValue == intValue
+                               && (intValue != 0 || BitConverter.DoubleToInt64Bits(numericValue) != JsNumber.NegativeZeroBits)
+                            ? JsNumber.Create(intValue)
+                            : JsNumber.Create(numericValue);
+                    }
+                case TokenKind.StringLiteral:
+                    return JsString.Create(((StringLiteral) literal).Value);
+                case TokenKind.BigIntLiteral:
+                    return JsBigInt.Create(((BigIntLiteral) literal).Value);
+                case TokenKind.RegExpLiteral:
+                    break;
             }
 
             return null;
@@ -73,13 +63,13 @@ namespace Jint.Runtime.Interpreter.Expressions
         private JsValue ResolveValue(EvaluationContext context)
         {
             var expression = (Literal) _expression;
-            if (expression.TokenType == TokenType.RegularExpression)
+            if (expression is RegExpLiteral regExpLiteral)
             {
-                var regExpLiteral = (RegExpLiteral) _expression;
                 var regExpParseResult = regExpLiteral.ParseResult;
                 if (regExpParseResult.Success)
                 {
-                    return context.Engine.Realm.Intrinsics.RegExp.Construct(regExpParseResult.Regex!, regExpLiteral.Regex.Pattern, regExpLiteral.Regex.Flags, regExpParseResult);
+                    var regex = regExpLiteral.UserData as Regex ?? regExpParseResult.Regex!;
+                    return context.Engine.Realm.Intrinsics.RegExp.Construct(regex, regExpLiteral.RegExp.Pattern, regExpLiteral.RegExp.Flags, regExpParseResult);
                 }
 
                 ExceptionHelper.ThrowSyntaxError(context.Engine.Realm, $"Unsupported regular expression. {regExpParseResult.ConversionError!.Description}");

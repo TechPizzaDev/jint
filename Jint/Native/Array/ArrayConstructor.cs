@@ -35,15 +35,15 @@ namespace Jint.Native.Array
         {
             var properties = new PropertyDictionary(3, checkExistingKeys: false)
             {
-                ["from"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunctionInstance(Engine, "from", From, 1, PropertyFlag.Configurable), PropertyFlag.NonEnumerable)),
-                ["isArray"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunctionInstance(Engine, "isArray", IsArray, 1), PropertyFlag.NonEnumerable)),
-                ["of"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunctionInstance(Engine, "of", Of, 0, PropertyFlag.Configurable), PropertyFlag.NonEnumerable))
+                ["from"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunction(Engine, "from", From, 1, PropertyFlag.Configurable), PropertyFlag.NonEnumerable)),
+                ["isArray"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunction(Engine, "isArray", IsArray, 1), PropertyFlag.NonEnumerable)),
+                ["of"] = new PropertyDescriptor(new PropertyDescriptor(new ClrFunction(Engine, "of", Of, 0, PropertyFlag.Configurable), PropertyFlag.NonEnumerable))
             };
             SetProperties(properties);
 
             var symbols = new SymbolDictionary(1)
             {
-                [GlobalSymbolRegistry.Species] = new GetSetPropertyDescriptor(get: new ClrFunctionInstance(Engine, "get [Symbol.species]", Species, 0, PropertyFlag.Configurable), set: Undefined,PropertyFlag.Configurable),
+                [GlobalSymbolRegistry.Species] = new GetSetPropertyDescriptor(get: new ClrFunction(Engine, "get [Symbol.species]", Species, 0, PropertyFlag.Configurable), set: Undefined,PropertyFlag.Configurable),
             };
             SetSymbols(symbols);
         }
@@ -82,22 +82,21 @@ namespace Jint.Native.Array
                 return instance;
             }
 
-            var objectInstance = TypeConverter.ToObject(_realm, items);
-            if (objectInstance is IObjectWrapper { Target: IEnumerable enumerable })
+            if (items is IObjectWrapper { Target: IEnumerable enumerable })
             {
                 return ConstructArrayFromIEnumerable(enumerable);
             }
 
-            return ConstructArrayFromArrayLike(thisObject, objectInstance, callable, thisArg);
+            var source = ArrayOperations.For(_realm, items, forWrite: false);
+            return ConstructArrayFromArrayLike(thisObject, source, callable, thisArg);
         }
 
         private ObjectInstance ConstructArrayFromArrayLike(
             JsValue thisObj,
-            ObjectInstance objectInstance,
+            ArrayOperations source,
             ICallable? callable,
             JsValue thisArg)
         {
-            var source = ArrayOperations.For(objectInstance);
             var length = source.GetLength();
 
             ObjectInstance a;
@@ -111,16 +110,16 @@ namespace Jint.Native.Array
                 a = ArrayCreate(length);
             }
 
-            var args = !ReferenceEquals(callable, null)
+            var args = callable is not null
                 ? _engine._jsValueArrayPool.RentArray(2)
                 : null;
 
-            var target = ArrayOperations.For(a);
+            var target = ArrayOperations.For(a, forWrite: true);
             uint n = 0;
             for (uint i = 0; i < length; i++)
             {
                 var value = source.Get(i);
-                if (!ReferenceEquals(callable, null))
+                if (callable is not null)
                 {
                     args![0] = value;
                     args[1] = i;
@@ -134,7 +133,7 @@ namespace Jint.Native.Array
                 n++;
             }
 
-            if (!ReferenceEquals(callable, null))
+            if (callable is not null)
             {
                 _engine._jsValueArrayPool.ReturnArray(args!);
             }
@@ -158,7 +157,7 @@ namespace Jint.Native.Array
                 ICallable? callable) : base(engine, iterator, 2)
             {
                 _thisArg = thisArg;
-                _instance = ArrayOperations.For(instance);
+                _instance = ArrayOperations.For(instance, forWrite: true);
                 _callable = callable;
             }
 
@@ -166,7 +165,7 @@ namespace Jint.Native.Array
             {
                 _index++;
                 JsValue jsValue;
-                if (!ReferenceEquals(_callable, null))
+                if (_callable is not null)
                 {
                     arguments[0] = currentValue;
                     arguments[1] = _index;
@@ -311,7 +310,7 @@ namespace Jint.Native.Array
                         break;
                     case JsArray array:
                         // direct copy
-                        instance = (JsArray) ConstructArrayFromArrayLike(Undefined, array, null, this);
+                        instance = (JsArray) ConstructArrayFromArrayLike(Undefined, ArrayOperations.For(array, forWrite: false), callable: null, this);
                         break;
                     default:
                         instance = ArrayCreate(capacity, prototypeObject);

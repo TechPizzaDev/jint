@@ -1,5 +1,4 @@
 using Jint.Native;
-using Jint.Native.Array;
 using Jint.Native.Function;
 using Jint.Runtime;
 using Jint.Runtime.Interop;
@@ -83,7 +82,7 @@ assertEqual(booleanCount, 1);
 ";
         var engine = new Engine();
         engine
-            .SetValue("testFunction", new ClrFunctionInstance(engine, "testFunction", (thisValue, args) =>
+            .SetValue("testFunction", new ClrFunction(engine, "testFunction", (thisValue, args) =>
             {
                 return engine.Invoke(thisValue, "then", new[] { JsValue.Undefined, args.At(0) });
             }))
@@ -111,7 +110,7 @@ assertEqual(booleanCount, 1);
         Assert.Equal("abc", instanceFromFunction.Get("a"));
         Assert.Equal(123, instanceFromFunction.Get("b"));
 
-        var arrayInstance = (ArrayInstance) _engine.Construct("Array", "abc", 123).AsObject();
+        var arrayInstance = (JsArray) _engine.Construct("Array", "abc", 123).AsObject();
         Assert.Equal((uint) 2, arrayInstance.Length);
         Assert.Equal("abc", arrayInstance[0]);
         Assert.Equal(123, arrayInstance[1]);
@@ -222,7 +221,7 @@ assertEqual(booleanCount, 1);
                     function foo(a = 123) { return a; }
                     foo()
                 })")
-            .As<FunctionInstance>().Call();
+            .As<Function>().Call();
 
         var result = _engine.Evaluate(@"
                 (function () {
@@ -230,7 +229,7 @@ assertEqual(booleanCount, 1);
                     let f = new Foo()
                     return f.test()
                 })")
-            .As<FunctionInstance>().Call();
+            .As<Function>().Call();
 
         Assert.True(result.IsInteger());
         Assert.Equal(123, result.AsInteger());

@@ -14,10 +14,10 @@ namespace Jint.Runtime.Modules;
 /// </summary>
 internal sealed class ModuleNamespace : ObjectInstance
 {
-    private readonly ModuleRecord _module;
+    private readonly Module _module;
     private readonly HashSet<string> _exports;
 
-    public ModuleNamespace(Engine engine, ModuleRecord module, List<string> exports) : base(engine)
+    public ModuleNamespace(Engine engine, Module module, List<string> exports) : base(engine)
     {
         _module = module;
         _exports = new HashSet<string>(exports, StringComparer.Ordinal);
@@ -40,7 +40,7 @@ internal sealed class ModuleNamespace : ObjectInstance
     /// <summary>
     /// https://tc39.es/ecma262/#sec-module-namespace-exotic-objects-setprototypeof-v
     /// </summary>
-    public override bool SetPrototypeOf(JsValue value) => SetImmutablePrototype(value);
+    internal override bool SetPrototypeOf(JsValue value) => SetImmutablePrototype(value);
 
     /// <summary>
     /// https://tc39.es/ecma262/#sec-set-immutable-prototype
@@ -164,7 +164,7 @@ internal sealed class ModuleNamespace : ObjectInstance
 
         if (string.Equals(binding.BindingName, "*namespace*", StringComparison.Ordinal))
         {
-            return ModuleRecord.GetModuleNamespace(targetModule);
+            return Module.GetModuleNamespace(targetModule);
         }
 
         var targetEnv = targetModule._environment;
@@ -204,7 +204,7 @@ internal sealed class ModuleNamespace : ObjectInstance
     public override List<JsValue> GetOwnPropertyKeys(Types types = Types.String | Types.Symbol)
     {
         var result = new List<JsValue>();
-        if ((types & Types.String) != Types.None)
+        if ((types & Types.String) != Types.Empty)
         {
             result.Capacity = _exports.Count;
             foreach (var export in _exports)

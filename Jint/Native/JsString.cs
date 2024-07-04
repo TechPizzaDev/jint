@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using Jint.Native.Generator;
+using Jint.Native.Iterator;
 using Jint.Runtime;
 
 namespace Jint.Native;
@@ -283,6 +286,21 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
         return ToString().Substring(startIndex);
     }
 
+    internal override bool TryGetIterator(
+        Realm realm,
+        [NotNullWhen(true)] out IteratorInstance? iterator,
+        GeneratorKind hint = GeneratorKind.Sync,
+        ICallable? method = null)
+    {
+        if (realm.Intrinsics.String.PrototypeObject.HasOriginalIterator)
+        {
+            iterator = new IteratorInstance.StringIterator(realm.GlobalEnv._engine, ToString());
+            return true;
+        }
+
+        return base.TryGetIterator(realm, out iterator, hint, method);
+    }
+
     public sealed override bool Equals(object? obj) => Equals(obj as JsString);
 
     public sealed override bool Equals(JsValue? other) => Equals(other as JsString);
@@ -304,7 +322,7 @@ public class JsString : JsValue, IEquatable<JsString>, IEquatable<string>
         return string.Equals(_value, other.ToString(), StringComparison.Ordinal);
     }
 
-    public override bool IsLooselyEqual(JsValue value)
+    protected internal override bool IsLooselyEqual(JsValue value)
     {
         if (value is JsString jsString)
         {

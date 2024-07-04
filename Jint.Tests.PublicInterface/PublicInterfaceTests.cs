@@ -7,6 +7,14 @@ namespace Jint.Tests.PublicInterface;
 public class PublicInterfaceTests
 {
     [Fact]
+    public void CanCallEval()
+    {
+        var engine = new Engine();
+        var value = engine.Intrinsics.Eval.Call("1 + 1");
+        Assert.Equal(2, value);
+    }
+
+    [Fact]
     public void BindFunctionInstancesArePublic()
     {
         var engine = new Engine(options =>
@@ -30,6 +38,15 @@ var coolingObject = {
 ");
     }
 
+    [Fact]
+    public void JsArgumentsIsPublic()
+    {
+        // debuggers might want to access the information
+        var obj = new Engine().Execute("function f() { return arguments; }").Evaluate("f('a', 'b', 'c');");
+        var arguments = Assert.IsType<JsArguments>(obj);
+        Assert.Equal((uint) 3, arguments.Length);
+    }
+
     private sealed class SetTimeoutEmulator : IDisposable
     {
         private readonly Engine _engine;
@@ -50,11 +67,11 @@ var coolingObject = {
                     {
                         lock (_engine)
                         {
-                            if (queueEntry is FunctionInstance fi)
+                            if (queueEntry is Function fi)
                             {
                                 _engine.Invoke(fi);
                             }
-                            else if (queueEntry is BindFunctionInstance bfi)
+                            else if (queueEntry is BindFunction bfi)
                             {
                                 _engine.Invoke(bfi);
                             }

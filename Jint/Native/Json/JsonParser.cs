@@ -4,7 +4,6 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using Esprima;
 using Jint.Runtime;
 
 namespace Jint.Native.Json
@@ -15,7 +14,7 @@ namespace Jint.Native.Json
         private readonly int _maxDepth;
 
         /// <summary>
-        /// Creates a new parser using the recursion depth specified in <see cref="JsonOptions.MaxParseDepth"/>.
+        /// Creates a new parser using the recursion depth specified in <see cref="Options.JsonOptions.MaxParseDepth"/>.
         /// </summary>
         public JsonParser(Engine engine)
             : this(engine, engine.Options.Json.MaxParseDepth)
@@ -103,7 +102,7 @@ namespace Jint.Native.Json
             {
                 if (_index < _length + 1 && IsHexDigit(_source[_index]))
                 {
-                    char ch = _source[_index++];
+                    char ch = char.ToLower(_source[_index++], CultureInfo.InvariantCulture);
                     code = code * 16 + "0123456789abcdef".IndexOf(ch);
                 }
                 else
@@ -690,11 +689,6 @@ namespace Jint.Native.Json
 
         public JsValue Parse(string code)
         {
-            return Parse(code, null);
-        }
-
-        public JsValue Parse(string code, ParserOptions? options)
-        {
             _source = code;
             _index = 0;
             _length = _source.Length;
@@ -770,7 +764,7 @@ namespace Jint.Native.Json
 
     internal static class StringExtensions
     {
-        public static char CharCodeAt(this string source, int index)
+        internal static char CharCodeAt(this string source, int index)
         {
             if (index > source.Length - 1)
             {

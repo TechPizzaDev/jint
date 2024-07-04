@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
-using Esprima;
+using Jint.Extensions;
 using Jint.Native.Object;
 using Jint.Native.String;
 using Jint.Runtime;
@@ -31,7 +31,7 @@ namespace Jint.Native.Global
         /// <summary>
         /// https://tc39.es/ecma262/#sec-parseint-string-radix
         /// </summary>
-        public static JsValue ParseInt(JsValue thisObject, JsValue[] arguments)
+        internal static JsValue ParseInt(JsValue thisObject, JsValue[] arguments)
         {
             var inputString = TypeConverter.ToString(arguments.At(0));
             var trimmed = StringPrototype.TrimEx(inputString);
@@ -120,7 +120,7 @@ namespace Jint.Native.Global
         /// <summary>
         /// https://tc39.es/ecma262/#sec-parsefloat-string
         /// </summary>
-        public static JsValue ParseFloat(JsValue thisObject, JsValue[] arguments)
+        internal static JsValue ParseFloat(JsValue thisObject, JsValue[] arguments)
         {
             var inputString = TypeConverter.ToString(arguments.At(0));
             var trimmedString = StringPrototype.TrimStartEx(inputString);
@@ -241,7 +241,7 @@ namespace Jint.Native.Global
         /// <summary>
         /// http://www.ecma-international.org/ecma-262/5.1/#sec-15.1.2.4
         /// </summary>
-        public static JsValue IsNaN(JsValue thisObject, JsValue[] arguments)
+        private static JsValue IsNaN(JsValue thisObject, JsValue[] arguments)
         {
             var value = arguments.At(0);
 
@@ -257,7 +257,7 @@ namespace Jint.Native.Global
         /// <summary>
         /// http://www.ecma-international.org/ecma-262/5.1/#sec-15.1.2.5
         /// </summary>
-        public static JsValue IsFinite(JsValue thisObject, JsValue[] arguments)
+        private static JsValue IsFinite(JsValue thisObject, JsValue[] arguments)
         {
             if (arguments.Length != 1)
             {
@@ -288,7 +288,7 @@ namespace Jint.Native.Global
         /// <param name="thisObject"></param>
         /// <param name="arguments"></param>
         /// <returns></returns>
-        public JsValue EncodeUri(JsValue thisObject, JsValue[] arguments)
+        private JsValue EncodeUri(JsValue thisObject, JsValue[] arguments)
         {
             var uriString = TypeConverter.ToString(arguments.At(0));
 
@@ -302,7 +302,7 @@ namespace Jint.Native.Global
         /// <param name="thisObject"></param>
         /// <param name="arguments"></param>
         /// <returns></returns>
-        public JsValue EncodeUriComponent(JsValue thisObject, JsValue[] arguments)
+        private JsValue EncodeUriComponent(JsValue thisObject, JsValue[] arguments)
         {
             var uriString = TypeConverter.ToString(arguments.At(0));
 
@@ -406,17 +406,17 @@ namespace Jint.Native.Global
 
 uriError:
             _engine.SignalError(ExceptionHelper.CreateUriError(_realm, "URI malformed"));
-            return null!;
+            return JsEmpty.Instance;
         }
 
-        public JsValue DecodeUri(JsValue thisObject, JsValue[] arguments)
+        private JsValue DecodeUri(JsValue thisObject, JsValue[] arguments)
         {
             var uriString = TypeConverter.ToString(arguments.At(0));
 
             return Decode(uriString, ReservedUriSet);
         }
 
-        public JsValue DecodeUriComponent(JsValue thisObject, JsValue[] arguments)
+        private JsValue DecodeUriComponent(JsValue thisObject, JsValue[] arguments)
         {
             var componentString = TypeConverter.ToString(arguments.At(0));
 
@@ -535,7 +535,7 @@ uriError:
 
 uriError:
             _engine.SignalError(ExceptionHelper.CreateUriError(_realm, "URI malformed"));
-            return null!;
+            return JsEmpty.Instance;
         }
 
         private static byte StringToIntBase16(ReadOnlySpan<char> s)
@@ -596,7 +596,7 @@ uriError:
         /// <summary>
         /// http://www.ecma-international.org/ecma-262/5.1/#sec-B.2.1
         /// </summary>
-        public JsValue Escape(JsValue thisObject, JsValue[] arguments)
+        private JsValue Escape(JsValue thisObject, JsValue[] arguments)
         {
             var uriString = TypeConverter.ToString(arguments.At(0));
 
@@ -628,7 +628,7 @@ uriError:
         /// <summary>
         /// http://www.ecma-international.org/ecma-262/5.1/#sec-B.2.2
         /// </summary>
-        public JsValue Unescape(JsValue thisObject, JsValue[] arguments)
+        private JsValue Unescape(JsValue thisObject, JsValue[] arguments)
         {
             var uriString = TypeConverter.ToString(arguments.At(0));
 
@@ -673,19 +673,7 @@ uriError:
             return GetOwnProperty(property) != PropertyDescriptor.Undefined;
         }
 
-        internal PropertyDescriptor GetProperty(Key property) => GetOwnProperty(property);
-
-        internal bool DefinePropertyOrThrow(Key property, PropertyDescriptor desc)
-        {
-            if (!DefineOwnProperty(property, desc))
-            {
-                ExceptionHelper.ThrowTypeError(_realm);
-            }
-
-            return true;
-        }
-
-        internal bool DefineOwnProperty(Key property, PropertyDescriptor desc)
+        private bool DefineOwnProperty(Key property, PropertyDescriptor desc)
         {
             var current = GetOwnProperty(property);
             if (current == desc)
@@ -751,12 +739,6 @@ uriError:
             setter.Call(this, new[] {value});
 
             return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void SetOwnProperty(Key property, PropertyDescriptor desc)
-        {
-            SetProperty(property, desc);
         }
     }
 }

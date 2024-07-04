@@ -1,12 +1,14 @@
-﻿namespace Jint.Runtime.Interop;
+﻿using Jint.Native;
 
-using Jint.Native;
+namespace Jint.Runtime.Interop;
 
-public class ClrHelper
+#pragma warning disable IL2072
+
+internal sealed class ClrHelper
 {
-    private readonly InteropOptions _interopOptions;
+    private readonly Options.InteropOptions _interopOptions;
 
-    internal ClrHelper(InteropOptions interopOptions)
+    internal ClrHelper(Options.InteropOptions interopOptions)
     {
         _interopOptions = interopOptions;
     }
@@ -28,7 +30,7 @@ public class ClrHelper
     public JsValue Unwrap(ObjectWrapper obj)
 #pragma warning restore CA1822
     {
-        return new ObjectWrapper(obj.Engine, obj.Target);
+        return ObjectWrapper.Create(obj.Engine, obj.Target);
     }
 
     /// <summary>
@@ -42,7 +44,7 @@ public class ClrHelper
         {
             ExceptionHelper.ThrowTypeError(type.Engine.Realm, "Argument obj must be an instance of type");
         }
-        return new ObjectWrapper(obj.Engine, obj.Target, type.ReferenceType);
+        return ObjectWrapper.Create(obj.Engine, obj.Target, type.ReferenceType);
     }
 
     /// <summary>
@@ -74,10 +76,8 @@ public class ClrHelper
         {
             return TypeReference.CreateTypeReference(obj.Engine, t);
         }
-        else
-        {
-            ExceptionHelper.ThrowArgumentException("Must be an ObjectWrapper of Type", nameof(obj));
-        }
+
+        ExceptionHelper.ThrowArgumentException("Must be an ObjectWrapper of Type", nameof(obj));
         return JsValue.Undefined;
     }
 

@@ -1,7 +1,4 @@
-﻿using Jint.Constraints;
-using Jint.Runtime;
-
-namespace Jint.Tests.PublicInterface;
+﻿namespace Jint.Tests.PublicInterface;
 
 [Collection("ConstraintUsageTests")]
 public class ConstraintUsageTests
@@ -61,7 +58,7 @@ public class ConstraintUsageTests
             for (var i = 0; i < 100; ++i)
             {
                 Thread.Sleep(TimeSpan.FromMilliseconds(200));
-                engine.CheckConstraints();
+                engine.Constraints.Check();
             }
 
             return "didn't throw!";

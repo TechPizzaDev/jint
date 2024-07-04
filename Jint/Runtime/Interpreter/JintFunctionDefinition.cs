@@ -1,8 +1,7 @@
 using System.Runtime.CompilerServices;
-using Esprima.Ast;
 using Jint.Native;
-using Jint.Native.Argument;
 using Jint.Native.Function;
+using Jint.Native.Generator;
 using Jint.Native.Promise;
 using Jint.Runtime.Environments;
 using Jint.Runtime.Interpreter.Expressions;
@@ -26,18 +25,18 @@ internal sealed class JintFunctionDefinition
         Name = !string.IsNullOrEmpty(function.Id?.Name) ? function.Id!.Name : null;
     }
 
-    public bool Strict => Function.Strict;
+    public bool Strict => Function.IsStrict();
 
-    public FunctionThisMode ThisMode => Function.Strict ? FunctionThisMode.Strict : FunctionThisMode.Global;
+    public FunctionThisMode ThisMode => Function.IsStrict() ? FunctionThisMode.Strict : FunctionThisMode.Global;
 
     /// <summary>
     /// https://tc39.es/ecma262/#sec-ordinarycallevaluatebody
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining | (MethodImplOptions) 512)]
-    internal Completion EvaluateBody(EvaluationContext context, FunctionInstance functionObject, JsValue[] argumentsList)
+    internal Completion EvaluateBody(EvaluationContext context, Function functionObject, JsValue[] argumentsList)
     {
         Completion result;
-        ArgumentsInstance? argumentsInstance = null;
+        JsArguments? argumentsInstance = null;
         if (Function.Expression)
         {
             // https://tc39.es/ecma262/#sec-runtime-semantics-evaluateconcisebody
@@ -48,6 +47,7 @@ internal sealed class JintFunctionDefinition
                 AsyncFunctionStart(context, promiseCapability, context =>
                 {
                     context.Engine.FunctionDeclarationInstantiation(functionObject, argumentsList);
+                    context.RunBeforeExecuteStatementChecks(Function.Body);
                     var jsValue = _bodyExpression.GetValue(context).Clone();
                     return new Completion(CompletionType.Return, jsValue, _bodyExpression._expression);
                 });
@@ -56,17 +56,14 @@ internal sealed class JintFunctionDefinition
             else
             {
                 argumentsInstance = context.Engine.FunctionDeclarationInstantiation(functionObject, argumentsList);
+                context.RunBeforeExecuteStatementChecks(Function.Body);
                 var jsValue = _bodyExpression.GetValue(context).Clone();
                 result = new Completion(CompletionType.Return, jsValue, Function.Body);
             }
         }
         else if (Function.Generator)
         {
-            // TODO generators
-            // result = EvaluateGeneratorBody(functionObject, argumentsList);
-            argumentsInstance = context.Engine.FunctionDeclarationInstantiation(functionObject, argumentsList);
-            _bodyStatementList ??= new JintStatementList(Function);
-            result = _bodyStatementList.Execute(context);
+            result = EvaluateGeneratorBody(context, functionObject, argumentsList);
         }
         else
         {
@@ -107,7 +104,11 @@ internal sealed class JintFunctionDefinition
     /// <summary>
     /// https://tc39.es/ecma262/#sec-asyncblockstart
     /// </summary>
-    private static void AsyncBlockStart(EvaluationContext context, PromiseCapability promiseCapability, Func<EvaluationContext, Completion> asyncBody, in ExecutionContext asyncContext)
+    private static void AsyncBlockStart(
+        EvaluationContext context,
+        PromiseCapability promiseCapability,
+        Func<EvaluationContext, Completion> asyncBody,
+        in ExecutionContext asyncContext)
     {
         var runningContext = context.Engine.ExecutionContext;
         // Set the code evaluation state of asyncContext such that when evaluation is resumed for that execution contxt the following steps will be performed:
@@ -148,16 +149,29 @@ internal sealed class JintFunctionDefinition
     /// <summary>
     /// https://tc39.es/ecma262/#sec-runtime-semantics-evaluategeneratorbody
     /// </summary>
-    private static Completion EvaluateGeneratorBody(FunctionInstance functionObject, JsValue[] argumentsList)
+    private Completion EvaluateGeneratorBody(
+        EvaluationContext context,
+        Function functionObject,
+        JsValue[] argumentsList)
     {
-        ExceptionHelper.ThrowNotImplementedException("generators not implemented");
-        return default;
+        var engine = context.Engine;
+        engine.FunctionDeclarationInstantiation(functionObject, argumentsList);
+        var G = engine.Realm.Intrinsics.Function.OrdinaryCreateFromConstructor(
+            functionObject,
+            static intrinsics => intrinsics.GeneratorFunction.PrototypeObject.PrototypeObject,
+            static (Engine engine, Realm _, object? _) => new GeneratorInstance(engine));
+
+        _bodyStatementList ??= new JintStatementList(Function);
+        _bodyStatementList.Reset();
+        G.GeneratorStart(_bodyStatementList);
+
+        return new Completion(CompletionType.Return, G, Function.Body);
     }
 
     internal State Initialize()
     {
         var node = (Node) Function;
-        var state = (State) (node.AssociatedData ??= BuildState(Function));
+        var state = (State) (node.UserData ??= BuildState(Function));
         return state;
     }
 
@@ -186,7 +200,7 @@ internal sealed class JintFunctionDefinition
         internal struct LexicalVariableDeclaration
         {
             public bool IsConstantDeclaration;
-            public List<string> BoundNames;
+            public List<Key> BoundNames;
         }
     }
 
@@ -196,7 +210,8 @@ internal sealed class JintFunctionDefinition
 
         ProcessParameters(function, state, out var hasArguments);
 
-        var hoistingScope = HoistingScope.GetFunctionLevelDeclarations(function.Strict, function);
+        var strict = function.IsStrict();
+        var hoistingScope = HoistingScope.GetFunctionLevelDeclarations(strict, function);
         var functionDeclarations = hoistingScope._functionDeclarations;
         var lexicalNames = hoistingScope._lexicalNames;
         state.VarNames = hoistingScope._varNames;
@@ -222,8 +237,8 @@ internal sealed class JintFunctionDefinition
         const string ParameterNameArguments = "arguments";
 
         state.ArgumentsObjectNeeded = true;
-        var thisMode = function.Strict ? FunctionThisMode.Strict : FunctionThisMode.Global;
-        if (function.Type == Nodes.ArrowFunctionExpression)
+        var thisMode = strict ? FunctionThisMode.Strict : FunctionThisMode.Global;
+        if (function.Type == NodeType.ArrowFunctionExpression)
         {
             thisMode = FunctionThisMode.Lexical;
         }
@@ -314,7 +329,7 @@ internal sealed class JintFunctionDefinition
             for (var i = 0; i < lexicalDeclarationsCount; i++)
             {
                 var d = _lexicalDeclarations[i];
-                var boundNames = new List<string>();
+                var boundNames = new List<Key>();
                 d.GetBoundNames(boundNames);
                 declarations[i] = new State.LexicalVariableDeclaration
                 {
@@ -341,7 +356,7 @@ internal sealed class JintFunctionDefinition
         {
             var id = (Key) identifier.Name;
             _hasDuplicates |= checkDuplicates && target.Contains(id);
-            target.Add(id); 
+            target.Add(id);
             hasArguments |= string.Equals(identifier.Name, "arguments", StringComparison.Ordinal);
             return;
         }
@@ -380,7 +395,7 @@ internal sealed class JintFunctionDefinition
                 for (var i = 0; i < objectPatternProperties.Count; i++)
                 {
                     var property = objectPatternProperties[i];
-                    if (property is Property p)
+                    if (property is AssignmentProperty p)
                     {
                         GetBoundNames(
                             p.Value,
@@ -417,7 +432,7 @@ internal sealed class JintFunctionDefinition
         out bool hasArguments)
     {
         hasArguments = false;
-        state.IsSimpleParameterList= true;
+        state.IsSimpleParameterList = true;
 
         var countParameters = true;
         ref readonly var functionDeclarationParams = ref function.Params;
@@ -428,16 +443,16 @@ internal sealed class JintFunctionDefinition
             var parameter = functionDeclarationParams[i];
             var type = parameter.Type;
 
-            if (type == Nodes.Identifier)
+            if (type == NodeType.Identifier)
             {
                 var id = (Key) ((Identifier) parameter).Name;
                 state.HasDuplicates |= parameterNames.Contains(id);
                 hasArguments = string.Equals(id.Name, "arguments", StringComparison.Ordinal);
                 parameterNames.Add(id);
             }
-            else if (type != Nodes.Literal)
+            else if (type != NodeType.Literal)
             {
-                countParameters &= type != Nodes.AssignmentPattern;
+                countParameters &= type != NodeType.AssignmentPattern;
                 state.IsSimpleParameterList = false;
                 GetBoundNames(
                     parameter,
@@ -449,7 +464,7 @@ internal sealed class JintFunctionDefinition
                     ref hasArguments);
             }
 
-            if (countParameters && type is Nodes.Identifier or Nodes.ObjectPattern or Nodes.ArrayPattern)
+            if (countParameters && type is NodeType.Identifier or NodeType.ObjectPattern or NodeType.ArrayPattern)
             {
                 state.Length++;
             }
@@ -484,14 +499,14 @@ internal sealed class JintFunctionDefinition
             foreach (var childNode in node.ChildNodes)
             {
                 var childType = childNode.Type;
-                if (childType == Nodes.Identifier)
+                if (childType == NodeType.Identifier)
                 {
                     if (string.Equals(((Identifier) childNode).Name, "arguments", StringComparison.Ordinal))
                     {
                         return true;
                     }
                 }
-                else if (childType != Nodes.FunctionDeclaration && !childNode.ChildNodes.IsEmpty())
+                else if (childType != NodeType.FunctionDeclaration && !childNode.ChildNodes.IsEmpty())
                 {
                     if (HasArgumentsReference(childNode))
                     {

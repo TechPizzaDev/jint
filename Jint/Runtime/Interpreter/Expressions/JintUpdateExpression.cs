@@ -1,7 +1,5 @@
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Runtime.Environments;
-using Jint.Runtime.References;
 
 namespace Jint.Runtime.Interpreter.Expressions
 {
@@ -24,11 +22,11 @@ namespace Jint.Runtime.Interpreter.Expressions
             var expression = (UpdateExpression) _expression;
             _prefix = expression.Prefix;
             _argument = Build(expression.Argument);
-            if (expression.Operator == UnaryOperator.Increment)
+            if (expression.Operator == Operator.Increment)
             {
                 _change = 1;
             }
-            else if (expression.Operator == UnaryOperator.Decrement)
+            else if (expression.Operator == Operator.Decrement)
             {
                 _change = -1;
             }
@@ -123,20 +121,16 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         private JsValue? UpdateIdentifier(EvaluationContext context)
         {
-            var strict = StrictModeScope.IsStrictModeCode;
             var name = _leftIdentifier!.Identifier;
-            var engine = context.Engine;
-            var env = engine.ExecutionContext.LexicalEnvironment;
             if (JintEnvironment.TryGetIdentifierEnvironmentWithBindingValue(
-                env,
-                name,
-                strict,
-                out var environmentRecord,
-                out var value))
+                    context.Engine.ExecutionContext.LexicalEnvironment,
+                    name,
+                    out var environmentRecord,
+                    out var value))
             {
-                if (strict && _evalOrArguments)
+                if (_evalOrArguments && StrictModeScope.IsStrictModeCode)
                 {
-                    ExceptionHelper.ThrowSyntaxError(engine.Realm);
+                    ExceptionHelper.ThrowSyntaxError(context.Engine.Realm);
                 }
 
                 var isInteger = value._type == InternalTypes.Integer;
@@ -169,7 +163,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                     }
                 }
 
-                environmentRecord.SetMutableBinding(name.Key, newValue!, strict);
+                environmentRecord.SetMutableBinding(name.Key, newValue!, StrictModeScope.IsStrictModeCode);
                 if (_prefix)
                 {
                     return newValue;

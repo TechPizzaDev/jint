@@ -1,6 +1,4 @@
 using System.Runtime.CompilerServices;
-using Esprima;
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Runtime.Interpreter;
 
@@ -79,7 +77,7 @@ namespace Jint.Runtime.Debugger
         /// The location is available as long as DebugMode is enabled - i.e. even when not stepping
         /// or hitting a breakpoint.
         /// </remarks>
-        public Location CurrentLocation { get; private set; }
+        public SourceLocation CurrentLocation { get; private set; }
 
         /// <summary>
         /// Collection of active breakpoints for the engine.
@@ -95,8 +93,13 @@ namespace Jint.Runtime.Debugger
         /// Internally, this is used for evaluating breakpoint conditions, but may also be used for e.g. watch lists
         /// in a debugger.
         /// </remarks>
-        public JsValue Evaluate(Script script)
+        public JsValue Evaluate(in Prepared<Script> preparedScript)
         {
+            if (!preparedScript.IsValid)
+            {
+                ExceptionHelper.ThrowInvalidPreparedScriptArgumentException(nameof(preparedScript));
+            }
+
             var context = _engine._activeEvaluationContext;
             if (context == null)
             {
@@ -104,7 +107,7 @@ namespace Jint.Runtime.Debugger
             }
             var callStackSize = _engine.CallStack.Count;
 
-            var list = new JintStatementList(null, script.Body);
+            var list = new JintStatementList(null, preparedScript.Program.Body);
             Completion result;
             try
             {
@@ -136,17 +139,17 @@ namespace Jint.Runtime.Debugger
             return result.GetValueOrDefault();
         }
 
-        /// <inheritdoc cref="Evaluate(Script)" />
-        public JsValue Evaluate(string source, ParserOptions? options = null)
+        /// <inheritdoc cref="Evaluate(in Prepared{Script})" />
+        public JsValue Evaluate(string sourceText, ScriptParsingOptions? parsingOptions = null)
         {
-            options ??= new ParserOptions();
-            var parser = new JavaScriptParser(options);
+            var parserOptions = parsingOptions?.GetParserOptions() ?? _engine.GetActiveParserOptions();
+            var parser = _engine.GetParserFor(parserOptions);
             try
             {
-                var script = parser.ParseScript(source, "evaluation");
-                return Evaluate(script);
+                var script = parser.ParseScript(sourceText, "evaluation");
+                return Evaluate(new Prepared<Script>(script, parserOptions));
             }
-            catch (ParserException ex)
+            catch (ParseErrorException ex)
             {
                 throw new DebugEvaluationException("An error occurred during debugger expression parsing", ex);
             }
@@ -188,7 +191,7 @@ namespace Jint.Runtime.Debugger
 
             var bodyLocation = functionBody.Location;
             var functionBodyEnd = bodyLocation.End;
-            var location = Location.From(functionBodyEnd, functionBodyEnd, bodyLocation.Source);
+            var location = SourceLocation.From(functionBodyEnd, functionBodyEnd, bodyLocation.SourceFile);
 
             CurrentLocation = location;
             if (HasStepEvents)
@@ -200,13 +203,13 @@ namespace Jint.Runtime.Debugger
 
         private void CheckBreakPointAndPause(
             Node? node,
-            Location location,
+            in SourceLocation location,
             JsValue? returnValue = null)
         {
             // Even if we matched a breakpoint, if we're stepping, the reason we're pausing is the step.
             // Still, we need to include the breakpoint at this location, in case the debugger UI needs to update
             // e.g. a hit count.
-            var breakLocation = new BreakLocation(location.Source, location.Start);
+            var breakLocation = new BreakLocation(location.SourceFile, location.Start);
             var breakPoint = BreakPoints.FindMatch(this, breakLocation);
 
             PauseType pauseType;
@@ -219,7 +222,7 @@ namespace Jint.Runtime.Debugger
             {
                 pauseType = PauseType.Break;
             }
-            else if (node?.Type == Nodes.DebuggerStatement &&
+            else if (node?.Type == NodeType.DebuggerStatement &&
                 _engine.Options.Debugger.StatementHandling == DebuggerStatementHandling.Script)
             {
                 pauseType = PauseType.DebuggerStatement;
@@ -235,7 +238,7 @@ namespace Jint.Runtime.Debugger
         private void Pause(
             PauseType type,
             Node? node,
-            Location location,
+            in SourceLocation location,
             JsValue? returnValue = null,
             BreakPoint? breakPoint = null)
         {

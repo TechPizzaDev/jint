@@ -6,7 +6,6 @@ using Jint.Native.BigInt;
 using Jint.Native.Boolean;
 using Jint.Native.Number;
 using Jint.Native.Object;
-using Jint.Native.Proxy;
 using Jint.Native.String;
 using Jint.Runtime;
 using Jint.Runtime.Descriptors;
@@ -84,7 +83,7 @@ namespace Jint.Native.Json
                 if (oi.IsArray())
                 {
                     _propertyList = new List<JsValue>();
-                    var len = oi.Length;
+                    var len = oi.GetLength();
                     var k = 0;
                     while (k < len)
                     {

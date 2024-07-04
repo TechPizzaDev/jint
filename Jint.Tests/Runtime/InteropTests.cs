@@ -3,8 +3,6 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Jint.Native;
-using Jint.Native.Object;
-using Jint.Native.Symbol;
 using Jint.Runtime;
 using Jint.Runtime.Interop;
 using Jint.Tests.Runtime.Converters;
@@ -849,16 +847,6 @@ namespace Jint.Tests.Runtime
         {
             var e = new Engine(cfg => cfg
                 .AllowClr(typeof(Person).Assembly)
-                .SetWrapObjectHandler((engine, target, type) =>
-                {
-                    var instance = new ObjectWrapper(engine, target);
-                    if (instance.IsArrayLike)
-                    {
-                        instance.SetPrototypeOf(engine.Realm.Intrinsics.Array.PrototypeObject);
-                    }
-
-                    return instance;
-                })
             );
 
             var person = new Person
@@ -882,19 +870,7 @@ namespace Jint.Tests.Runtime
         [Fact]
         public void CanSetIsConcatSpreadableForArrays()
         {
-            var engine = new Engine(opt =>
-            {
-                opt.SetWrapObjectHandler((eng, obj, type) =>
-                {
-                    var wrapper = new ObjectWrapper(eng, obj);
-                    if (wrapper.IsArrayLike)
-                    {
-                        wrapper.SetPrototypeOf(eng.Realm.Intrinsics.Array.PrototypeObject);
-                        wrapper.Set(GlobalSymbolRegistry.IsConcatSpreadable, true);
-                    }
-                    return wrapper;
-                });
-            });
+            var engine = new Engine();
 
             engine
                 .SetValue("list1", new List<string> { "A", "B", "C" })
@@ -1323,6 +1299,22 @@ namespace Jint.Tests.Runtime
                 assert(circle.Radius === 0);
                 assert(circle.Perimeter() === 0);
             ");
+        }
+
+        [Fact]
+        public void ShouldImportEmptyNamespace()
+        {
+            RunTest("""
+                var nullSpace = importNamespace(null);
+                var c1 = new nullSpace.ShapeWithoutNameSpace();
+                assert(c1.Perimeter() === 42);
+                var undefinedSpace = importNamespace(undefined);
+                var c2 = new undefinedSpace.ShapeWithoutNameSpace();
+                assert(c2.Perimeter() === 42);
+                var defaultSpace = importNamespace();
+                var c3 = new defaultSpace.ShapeWithoutNameSpace();
+                assert(c3.Perimeter() === 42);
+            """);
         }
 
         [Fact]
@@ -2358,7 +2350,7 @@ namespace Jint.Tests.Runtime
             ");
 
             Assert.NotNull(c.ToString());
-            Assert.Equal((uint) 0, c.As<ObjectInstance>().Length);
+            Assert.Equal((uint) 0, c.AsObject().GetLength());
         }
 
         private class DictionaryWrapper
@@ -2634,7 +2626,7 @@ namespace Jint.Tests.Runtime
         [Fact]
         public void ObjectWrapperWrappingDictionaryShouldNotBeArrayLike()
         {
-            var wrapper = new ObjectWrapper(_engine, new Dictionary<string, object>());
+            var wrapper = ObjectWrapper.Create(_engine, new Dictionary<string, object>());
             Assert.False(wrapper.IsArrayLike);
         }
 
@@ -2887,7 +2879,7 @@ namespace Jint.Tests.Runtime
         {
             var engine = new Engine(options =>
             {
-                options.Interop.CreateClrObject = oi => new Dictionary<string, object>((int) oi.Length);
+                options.Interop.CreateClrObject = oi => new Dictionary<string, object>();
             });
 
             object capture = null;
@@ -2912,6 +2904,48 @@ namespace Jint.Tests.Runtime
 
             Assert.Equal(1, engine.Evaluate("Array.prototype.indexOf.call(list, 'B')"));
             Assert.Equal(1, engine.Evaluate("Array.prototype.lastIndexOf.call(list, 'B')"));
+        }
+
+        [Fact]
+        public void ArrayPrototypeFindWithInteropList()
+        {
+            var engine = new Jint.Engine();
+            var list = new List<string> { "A", "B", "C" };
+ 
+            engine.SetValue("list", list);
+
+            Assert.Equal(1, engine.Evaluate("list.findIndex((x) => x === 'B')"));
+            Assert.Equal('B', engine.Evaluate("list.find((x) => x === 'B')"));
+        }
+
+        [Fact]
+        public void ArrayPrototypePushWithInteropList()
+        {
+            var engine = new Jint.Engine();
+
+            var list = new List<string> { "A", "B", "C" };
+
+            engine.SetValue("list", list);
+
+            engine.Evaluate("list.push('D')");
+            Assert.Equal(4, list.Count);
+            Assert.Equal("D", list[3]);
+            Assert.Equal(3, engine.Evaluate("list.lastIndexOf('D')"));
+        }
+
+        [Fact]
+        public void ArrayPrototypePopWithInteropList()
+        {
+            var engine = new Jint.Engine();
+
+            var list = new List<string> { "A", "B", "C" };
+            engine.SetValue("list", list);
+
+            Assert.Equal(2, engine.Evaluate("list.lastIndexOf('C')"));
+            Assert.Equal(3, list.Count);
+            Assert.Equal("C", engine.Evaluate("list.pop()"));
+            Assert.Equal(2, list.Count);
+            Assert.Equal(-1, engine.Evaluate("list.lastIndexOf('C')"));
         }
 
         [Fact]
@@ -3019,7 +3053,7 @@ namespace Jint.Tests.Runtime
         public void CanUseClrFunction()
         {
             var engine = new Engine();
-            engine.SetValue("fn", new ClrFunctionInstance(engine, "fn", (_, args) => (JsValue) (args[0].AsInteger() + 1)));
+            engine.SetValue("fn", new ClrFunction(engine, "fn", (_, args) => (JsValue) (args[0].AsInteger() + 1)));
 
             var result = engine.Evaluate("fn(1)");
 
@@ -3030,7 +3064,7 @@ namespace Jint.Tests.Runtime
         public void ShouldAllowClrExceptionsThrough()
         {
             var engine = new Engine(opts => opts.CatchClrExceptions(exc => false));
-            engine.SetValue("fn", new ClrFunctionInstance(engine, "fn", (_, _) => throw new InvalidOperationException("This is a C# error")));
+            engine.SetValue("fn", new ClrFunction(engine, "fn", (_, _) => throw new InvalidOperationException("This is a C# error")));
             const string Source = @"
 function wrap() {
   fn();
@@ -3045,7 +3079,7 @@ wrap();
         public void ShouldConvertClrExceptionsToErrors()
         {
             var engine = new Engine(opts => opts.CatchClrExceptions(exc => exc is InvalidOperationException));
-            engine.SetValue("fn", new ClrFunctionInstance(engine, "fn", (_, _) => throw new InvalidOperationException("This is a C# error")));
+            engine.SetValue("fn", new ClrFunction(engine, "fn", (_, _) => throw new InvalidOperationException("This is a C# error")));
             const string Source = @"
 function wrap() {
   fn();
@@ -3061,7 +3095,7 @@ wrap();
         public void ShouldAllowCatchingConvertedClrExceptions()
         {
             var engine = new Engine(opts => opts.CatchClrExceptions(exc => exc is InvalidOperationException));
-            engine.SetValue("fn", new ClrFunctionInstance(engine, "fn", (_, _) => throw new InvalidOperationException("This is a C# error")));
+            engine.SetValue("fn", new ClrFunction(engine, "fn", (_, _) => throw new InvalidOperationException("This is a C# error")));
             const string Source = @"
 try {
   fn();
@@ -3421,6 +3455,33 @@ try {
             engine.Evaluate("test.metadata['abc'] = 123");
             var result = engine.Evaluate("test.metadata['abc']");
             Assert.Equal("from-wrapper", result);
+        }
+
+        [Fact]
+        public void ShouldRespectConcreteGenericReturnTypes()
+        {
+            var engine = new Engine(opt =>
+            {
+                opt.AddExtensionMethods(typeof(Enumerable)); // Allow LINQ extension methods.
+            });
+
+            var result = new List<string>();
+            void Debug(object o)
+            {
+                result.Add($"{o?.GetType().Name ?? "null"}: {o ?? "null"}");
+            }
+
+            engine.SetValue("debug", Debug);
+            engine.SetValue("dict", new Dictionary<string, string> { ["test"] = "val" });
+
+            engine.Execute("var t = dict.last(kvp => { debug(kvp); debug(kvp.key); return kvp.key != null; } );");
+            engine.Execute("debug(t); debug(t.key);");
+
+            Assert.Equal(4, result.Count);
+            Assert.Equal("KeyValuePair`2: [test, val]", result[0]);
+            Assert.Equal("String: test", result[1]);
+            Assert.Equal("KeyValuePair`2: [test, val]", result[2]);
+            Assert.Equal("String: test", result[3]);
         }
     }
 }

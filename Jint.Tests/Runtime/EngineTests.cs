@@ -1,7 +1,5 @@
 ﻿using System.Globalization;
 using System.Reflection;
-using Esprima;
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Native.Array;
 using Jint.Native.Number;
@@ -602,14 +600,15 @@ namespace Jint.Tests.Runtime
         [Fact]
         public void ForInStatement()
         {
-            RunTest(@"
+            var engine = new Engine();
+            var result = engine.Evaluate("""
                 var x, y, str = '';
                 for(var z in this) {
-                    str += z;
+                 str += z;
                 }
-
-                equal('xystrz', str);
-            ");
+                return str;
+         """);
+            Assert.Equal("xystrz", result);
         }
 
         [Fact]
@@ -832,7 +831,7 @@ namespace Jint.Tests.Runtime
 
             var add = _engine.GetValue("add");
 
-            Assert.Equal(3, add.Invoke(_engine, 1, 2));
+            Assert.Equal(3, _engine.Invoke(add, 1, 2));
         }
 
         [Fact]
@@ -844,7 +843,7 @@ namespace Jint.Tests.Runtime
 
             var add = _engine.GetValue("get");
             string str = null;
-            Assert.Equal(Native.JsValue.Null, add.Invoke(_engine, str));
+            Assert.Equal(Native.JsValue.Null, _engine.Invoke(add, str));
         }
 
 
@@ -857,7 +856,7 @@ namespace Jint.Tests.Runtime
 
             var x = _engine.GetValue("x");
 
-            var exception = Assert.Throws<JavaScriptException>(() => x.Invoke(_engine, 1, 2));
+            var exception = Assert.Throws<JavaScriptException>(() => _engine.Invoke(x, 1, 2));
             Assert.Equal("Can only invoke functions", exception.Message);
         }
 
@@ -893,7 +892,7 @@ namespace Jint.Tests.Runtime
             var e = new Engine();
             e.Evaluate("var x = { literal: true };");
 
-            var pd = e.GetValue("x").AsObject().GetProperty("doesNotExist");
+            var pd = e.GetValue("x").AsObject().GetOwnProperty("doesNotExist");
             Assert.Throws<InvalidOperationException>(() => pd.Value = "oh no, assigning this breaks things");
         }
 
@@ -1047,11 +1046,11 @@ namespace Jint.Tests.Runtime
             {
                 engine.Evaluate("1.2+ new", "jQuery.js");
             }
-            catch (ParserException e)
+            catch (SyntaxErrorException e)
             {
                 Assert.Equal(1, e.LineNumber);
-                Assert.Equal(9, e.Column);
-                Assert.Equal("jQuery.js", e.SourceLocation);
+                Assert.Equal(8, e.Column);
+                Assert.Equal("jQuery.js", e.SourceFile);
             }
         }
         #region DateParsingAndStrings
@@ -1297,8 +1296,8 @@ var prep = function (fn) { fn(); };
         public void ShouldExecuteKnockoutWithoutErrorWhetherTolerantOrIntolerant()
         {
             var content = GetEmbeddedFile("knockout-3.4.0.js");
-            _engine.Execute(content, new ParserOptions { Tolerant = true });
-            _engine.Execute(content, new ParserOptions { Tolerant = false });
+            _engine.Execute(content, new ScriptParsingOptions { Tolerant = true });
+            _engine.Execute(content, new ScriptParsingOptions { Tolerant = false });
         }
 
         [Fact]
@@ -1315,7 +1314,7 @@ var prep = function (fn) { fn(); };
         {
             var code = "if({ __proto__: [], __proto__:[] } instanceof Array) {}";
 
-            Exception ex = Assert.Throws<ParserException>(() => _engine.Execute(code, new ParserOptions { Tolerant = false }));
+            Exception ex = Assert.Throws<SyntaxErrorException>(() => _engine.Execute(code, new ScriptParsingOptions { Tolerant = false }));
             Assert.Contains("Duplicate __proto__ fields are not allowed in object literals", ex.Message);
 
             ex = Assert.Throws<JavaScriptException>(() => _engine.Execute($"eval('{code}')"));
@@ -1492,15 +1491,15 @@ var prep = function (fn) { fn(); };
 
             var engine = new Engine(options => options.DebugMode());
 
-            engine.DebugHandler.Break += EngineStep;
+            engine.Debugger.Break += EngineStep;
 
-            engine.DebugHandler.BreakPoints.Set(new BreakPoint(1, 0));
+            engine.Debugger.BreakPoints.Set(new BreakPoint(1, 0));
 
             engine.Evaluate(@"var local = true;
                 if (local === true)
                 {}");
 
-            engine.DebugHandler.Break -= EngineStep;
+            engine.Debugger.Break -= EngineStep;
 
             Assert.Equal(1, countBreak);
         }
@@ -1513,13 +1512,13 @@ var prep = function (fn) { fn(); };
 
             var engine = new Engine(options => options.DebugMode().InitialStepMode(stepMode));
 
-            engine.DebugHandler.Step += EngineStep;
+            engine.Debugger.Step += EngineStep;
 
             engine.Evaluate(@"var local = true;
                 var creatingSomeOtherLine = 0;
                 var lastOneIPromise = true");
 
-            engine.DebugHandler.Step -= EngineStep;
+            engine.Debugger.Step -= EngineStep;
 
             Assert.Equal(3, countBreak);
         }
@@ -1531,14 +1530,14 @@ var prep = function (fn) { fn(); };
             stepMode = StepMode.Into;
 
             var engine = new Engine(options => options.DebugMode().InitialStepMode(stepMode));
-            engine.DebugHandler.BreakPoints.Set(new BreakPoint(1, 1));
-            engine.DebugHandler.Step += EngineStep;
-            engine.DebugHandler.Break += EngineStep;
+            engine.Debugger.BreakPoints.Set(new BreakPoint(1, 1));
+            engine.Debugger.Step += EngineStep;
+            engine.Debugger.Break += EngineStep;
 
             engine.Evaluate(@"var local = true;");
 
-            engine.DebugHandler.Step -= EngineStep;
-            engine.DebugHandler.Break -= EngineStep;
+            engine.Debugger.Step -= EngineStep;
+            engine.Debugger.Break -= EngineStep;
 
             Assert.Equal(1, countBreak);
         }
@@ -1558,8 +1557,8 @@ var prep = function (fn) { fn(); };
             stepMode = StepMode.None;
 
             var engine = new Engine(options => options.DebugMode());
-            engine.DebugHandler.BreakPoints.Set(new BreakPoint(5, 0));
-            engine.DebugHandler.Break += EngineStepVerifyDebugInfo;
+            engine.Debugger.BreakPoints.Set(new BreakPoint(5, 0));
+            engine.Debugger.Break += EngineStepVerifyDebugInfo;
 
             engine.Evaluate(@"var global = true;
                             function func1()
@@ -1569,7 +1568,7 @@ var prep = function (fn) { fn(); };
                             }
                             func1();");
 
-            engine.DebugHandler.Break -= EngineStepVerifyDebugInfo;
+            engine.Debugger.Break -= EngineStepVerifyDebugInfo;
 
             Assert.Equal(1, countBreak);
         }
@@ -1603,10 +1602,10 @@ var prep = function (fn) { fn(); };
 
             var engine = new Engine(options => options.DebugMode());
 
-            engine.DebugHandler.Break += EngineStep;
+            engine.Debugger.Break += EngineStep;
 
-            engine.DebugHandler.BreakPoints.Set(new BreakPoint(5, 16, "condition === true"));
-            engine.DebugHandler.BreakPoints.Set(new BreakPoint(6, 16, "condition === false"));
+            engine.Debugger.BreakPoints.Set(new BreakPoint(5, 16, "condition === true"));
+            engine.Debugger.BreakPoints.Set(new BreakPoint(6, 16, "condition === false"));
 
             engine.Evaluate(@"var local = true;
                 var condition = true;
@@ -1616,7 +1615,7 @@ var prep = function (fn) { fn(); };
                 ;
                 }");
 
-            engine.DebugHandler.Break -= EngineStep;
+            engine.Debugger.Break -= EngineStep;
 
             Assert.Equal(1, countBreak);
         }
@@ -1629,7 +1628,7 @@ var prep = function (fn) { fn(); };
 
             var engine = new Engine(options => options.DebugMode().InitialStepMode(StepMode.Into));
 
-            engine.DebugHandler.Step += EngineStep;
+            engine.Debugger.Step += EngineStep;
 
             engine.Evaluate(@"function func() // first step - then stepping out
                 {
@@ -1639,7 +1638,7 @@ var prep = function (fn) { fn(); };
                 func(); // shall not step
                 ; // shall not step ");
 
-            engine.DebugHandler.Step -= EngineStep;
+            engine.Debugger.Step -= EngineStep;
 
             Assert.Equal(1, countBreak);
         }
@@ -1651,7 +1650,7 @@ var prep = function (fn) { fn(); };
 
             var engine = new Engine(options => options.DebugMode().InitialStepMode(StepMode.Into));
 
-            engine.DebugHandler.Step += EngineStepOutWhenInsideFunction;
+            engine.Debugger.Step += EngineStepOutWhenInsideFunction;
 
             engine.Evaluate(@"function func() // first step
                 {
@@ -1661,7 +1660,7 @@ var prep = function (fn) { fn(); };
                 func(); // second step
                 ; // fourth step ");
 
-            engine.DebugHandler.Step -= EngineStepOutWhenInsideFunction;
+            engine.Debugger.Step -= EngineStepOutWhenInsideFunction;
 
             Assert.Equal(4, countBreak);
         }
@@ -1684,8 +1683,8 @@ var prep = function (fn) { fn(); };
             stepMode = StepMode.None;
 
             var engine = new Engine(options => options.DebugMode());
-            engine.DebugHandler.BreakPoints.Set(new BreakPoint(4, 32));
-            engine.DebugHandler.Break += EngineStep;
+            engine.Debugger.BreakPoints.Set(new BreakPoint(4, 32));
+            engine.Debugger.Break += EngineStep;
 
             engine.Evaluate(@"var global = true;
                             function func1()
@@ -1695,7 +1694,7 @@ var prep = function (fn) { fn(); };
                             }
                             func1();");
 
-            engine.DebugHandler.Break -= EngineStep;
+            engine.Debugger.Break -= EngineStep;
 
             Assert.Equal(1, countBreak);
         }
@@ -1708,7 +1707,7 @@ var prep = function (fn) { fn(); };
 
             var engine = new Engine(options => options.DebugMode().InitialStepMode(stepMode));
 
-            engine.DebugHandler.Step += EngineStep;
+            engine.Debugger.Step += EngineStep;
 
             engine.Evaluate(@"function func() // first step
                 {
@@ -1718,7 +1717,7 @@ var prep = function (fn) { fn(); };
                 func(); // second step
                 ; // third step ");
 
-            engine.DebugHandler.Step -= EngineStep;
+            engine.Debugger.Step -= EngineStep;
 
             Assert.Equal(3, countBreak);
         }
@@ -1731,7 +1730,7 @@ var prep = function (fn) { fn(); };
 
             var engine = new Engine(options => options.DebugMode().InitialStepMode(stepMode));
 
-            engine.DebugHandler.Step += EngineStep;
+            engine.Debugger.Step += EngineStep;
 
             engine.Evaluate(@"var step1 = 1; // first step
                 var step2 = 2; // second step
@@ -1740,7 +1739,7 @@ var prep = function (fn) { fn(); };
                     ; // fourth step
                 }");
 
-            engine.DebugHandler.Step -= EngineStep;
+            engine.Debugger.Step -= EngineStep;
 
             Assert.Equal(4, countBreak);
         }
@@ -2569,7 +2568,7 @@ var prep = function (fn) { fn(); };
                 }");
 
             var concat = _engine.GetValue("concat");
-            var result = concat.Invoke(_engine, "concat", "well", "done").ToObject() as string;
+            var result = _engine.Invoke(concat, "concat", "well", "done").ToObject() as string;
             Assert.Equal("concatwelldone", result);
         }
 
@@ -2703,10 +2702,10 @@ function output(x) {
             ");
 
             var function = _engine.GetValue("f");
-            var result = function.Invoke(_engine, 3).ToString();
+            var result = _engine.Invoke(function, 3).ToString();
             Assert.Equal("15", result);
 
-            result = function.Invoke(_engine, 3, JsValue.Undefined).ToString();
+            result = _engine.Invoke(function, 3, JsValue.Undefined).ToString();
             Assert.Equal("15", result);
         }
 
@@ -2746,7 +2745,7 @@ x.test = {
             var engine = new Engine(options => options
                 .SetTypeConverter(e => new TestTypeConverter())
             );
-            Assert.IsType<TestTypeConverter>(engine.ClrTypeConverter);
+            Assert.IsType<TestTypeConverter>(engine.TypeConverter);
             engine.SetValue("x", new Testificate());
             Assert.Throws<JavaScriptException>(() => engine.Evaluate("c.Name"));
         }
@@ -2860,8 +2859,8 @@ x.test = {
             Assert.Equal("Cannot delete property 'prototype' of function Boolean() { [native code] }", ex.Message);
 
             const string source2 = "'use strict'; delete foobar;";
-            ex = Assert.Throws<JavaScriptException>(() => engine.Evaluate(source2));
-            Assert.Equal("Delete of an unqualified identifier in strict mode.", ex.Message);
+            var ex2 = Assert.Throws<SyntaxErrorException>(() => engine.Evaluate(source2));
+            Assert.Equal("Delete of an unqualified identifier in strict mode", ex2.Description);
         }
 
         [Fact]
@@ -2939,7 +2938,7 @@ x.test = {
         public void ExecuteWithParserOptionsShouldTriggerBeforeEvaluateEvent()
         {
             TestBeforeEvaluateEvent(
-                (engine, code) => engine.Execute(code, ParserOptions.Default),
+                (engine, code) => engine.Execute(code, ScriptParsingOptions.Default),
                 expectedSource: "<anonymous>"
             );
         }
@@ -2948,7 +2947,7 @@ x.test = {
         public void ExecuteWithSourceAndParserOptionsShouldTriggerBeforeEvaluateEvent()
         {
             TestBeforeEvaluateEvent(
-                (engine, code) => engine.Execute(code, "mysource", ParserOptions.Default),
+                (engine, code) => engine.Execute(code, "mysource", ScriptParsingOptions.Default),
                 expectedSource: "mysource"
             );
         }
@@ -2975,7 +2974,7 @@ x.test = {
         public void EvaluateWithParserOptionsShouldTriggerBeforeEvaluateEvent()
         {
             TestBeforeEvaluateEvent(
-                (engine, code) => engine.Evaluate(code, ParserOptions.Default),
+                (engine, code) => engine.Evaluate(code, ScriptParsingOptions.Default),
                 expectedSource: "<anonymous>"
             );
         }
@@ -2984,7 +2983,7 @@ x.test = {
         public void EvaluateWithSourceAndParserOptionsShouldTriggerBeforeEvaluateEvent()
         {
             TestBeforeEvaluateEvent(
-                (engine, code) => engine.Evaluate(code, "mysource", ParserOptions.Default),
+                (engine, code) => engine.Evaluate(code, "mysource", ScriptParsingOptions.Default),
                 expectedSource: "mysource"
             );
         }
@@ -2998,7 +2997,7 @@ x.test = {
             const string module2 = "export default 'dummy';";
 
             var beforeEvaluateTriggeredCount = 0;
-            engine.DebugHandler.BeforeEvaluate += (sender, ast) =>
+            engine.Debugger.BeforeEvaluate += (sender, ast) =>
             {
                 beforeEvaluateTriggeredCount++;
                 Assert.Equal(engine, sender.Engine);
@@ -3006,13 +3005,13 @@ x.test = {
                 switch (beforeEvaluateTriggeredCount)
                 {
                     case 1:
-                        Assert.Equal("module1", ast.Location.Source);
+                        Assert.Equal("module1", ast.Location.SourceFile);
                         Assert.Collection(ast.Body,
                             node => Assert.IsType<ImportDeclaration>(node)
                         );
                         break;
                     case 2:
-                        Assert.Equal("module2", ast.Location.Source);
+                        Assert.Equal("module2", ast.Location.SourceFile);
                         Assert.Collection(ast.Body,
                             node => Assert.IsType<ExportDefaultDeclaration>(node)
                         );
@@ -3020,9 +3019,9 @@ x.test = {
                 }
             };
 
-            engine.AddModule("module1", module1);
-            engine.AddModule("module2", module2);
-            engine.ImportModule("module1");
+            engine.Modules.Add("module1", module1);
+            engine.Modules.Add("module2", module2);
+            engine.Modules.Import("module1");
 
             Assert.Equal(2, beforeEvaluateTriggeredCount);
         }
@@ -3049,11 +3048,11 @@ x.test = {
             const string script = "'dummy';";
 
             var beforeEvaluateTriggered = false;
-            engine.DebugHandler.BeforeEvaluate += (sender, ast) =>
+            engine.Debugger.BeforeEvaluate += (sender, ast) =>
             {
                 beforeEvaluateTriggered = true;
                 Assert.Equal(engine, sender.Engine);
-                Assert.Equal(expectedSource, ast.Location.Source);
+                Assert.Equal(expectedSource, ast.Location.SourceFile);
                 Assert.Collection(ast.Body, node => Assert.True(TestHelpers.IsLiteral(node, "dummy")));
             };
 

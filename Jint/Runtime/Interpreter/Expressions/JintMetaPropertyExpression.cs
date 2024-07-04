@@ -1,4 +1,3 @@
-using Esprima.Ast;
 using Jint.Runtime.Modules;
 
 namespace Jint.Runtime.Interpreter.Expressions
@@ -22,7 +21,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
             if (string.Equals(expression.Meta.Name, "import", StringComparison.Ordinal) && string.Equals(expression.Property.Name, "meta", StringComparison.Ordinal))
             {
-                var module = (SourceTextModuleRecord) context.Engine.ExecutionContext.ScriptOrModule!;
+                var module = (SourceTextModule) context.Engine.ExecutionContext.ScriptOrModule!;
                 var importMeta = module.ImportMeta;
                 if (importMeta is null)
                 {

@@ -1,7 +1,5 @@
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Runtime.Environments;
-using Jint.Runtime.References;
 
 namespace Jint.Runtime.Interpreter.Expressions
 {
@@ -33,7 +31,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                     property = cache ? JsString.CachedCreate(identifier.Name) : JsString.Create(identifier.Name);
                 }
             }
-            else if (expression.Property.Type == Nodes.Literal)
+            else if (expression.Property.Type == NodeType.Literal)
             {
                 property = JintLiteralExpression.ConvertToJsValue((Literal) expression.Property);
             }
@@ -47,7 +45,7 @@ namespace Jint.Runtime.Interpreter.Expressions
             {
                 _objectExpression = Build(_memberExpression.Object);
 
-                _determinedProperty ??= _expression.AssociatedData as JsValue ?? InitializeDeterminedProperty(_memberExpression, cache: false);
+                _determinedProperty ??= _expression.UserData as JsValue ?? InitializeDeterminedProperty(_memberExpression, cache: false);
 
                 if (ReferenceEquals(_determinedProperty, _nullMarker))
                 {
@@ -59,21 +57,18 @@ namespace Jint.Runtime.Interpreter.Expressions
             }
 
             JsValue? actualThis = null;
-            string? baseReferenceName = null;
+            object? baseReferenceName = null;
             JsValue? baseValue = null;
-            var isStrictModeCode = StrictModeScope.IsStrictModeCode;
 
             var engine = context.Engine;
             if (_objectExpression is JintIdentifierExpression identifierExpression)
             {
                 var identifier = identifierExpression.Identifier;
                 baseReferenceName = identifier.Key.Name;
-                var strict = isStrictModeCode;
                 var env = engine.ExecutionContext.LexicalEnvironment;
                 JintEnvironment.TryGetIdentifierEnvironmentWithBindingValue(
                     env,
                     identifier,
-                    strict,
                     out _,
                     out baseValue);
             }
@@ -83,7 +78,7 @@ namespace Jint.Runtime.Interpreter.Expressions
             }
             else if (_objectExpression is JintSuperExpression)
             {
-                var env = (FunctionEnvironmentRecord) engine.ExecutionContext.GetThisEnvironment();
+                var env = (FunctionEnvironment) engine.ExecutionContext.GetThisEnvironment();
                 actualThis = env.GetThisBinding();
                 baseValue = env.GetSuperBase();
             }
@@ -98,13 +93,12 @@ namespace Jint.Runtime.Interpreter.Expressions
                 }
                 if (baseReference is Reference reference)
                 {
-                    baseReferenceName = reference.ReferencedName.ToString();
-                    baseValue = engine.GetValue(reference, false);
-                    engine._referencePool.Return(reference);
+                    baseReferenceName = reference.ReferencedName;
+                    baseValue = engine.GetValue(reference, returnReferenceToPool: true);
                 }
                 else
                 {
-                    baseValue = engine.GetValue(baseReference, false);
+                    baseValue = engine.GetValue(baseReference, returnReferenceToPool: false);
                 }
             }
 
@@ -119,7 +113,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                 // we can use base data types securely, object evaluation can mess things up
                 var referenceName = property.IsPrimitive()
                     ? TypeConverter.ToString(property)
-                    : _determinedProperty?.ToString() ?? baseReferenceName;
+                    : _determinedProperty?.ToString() ?? baseReferenceName?.ToString();
 
                 TypeConverter.CheckObjectCoercible(engine, baseValue, _memberExpression.Property, referenceName!);
             }
@@ -129,12 +123,7 @@ namespace Jint.Runtime.Interpreter.Expressions
                 return MakePrivateReference(engine, baseValue, property);
             }
 
-            // only convert if necessary
-            var propertyKey = property.IsInteger() && baseValue.IsIntegerIndexedArray
-                ? property
-                : TypeConverter.ToPropertyKey(property);
-
-            return context.Engine._referencePool.Rent(baseValue, propertyKey, isStrictModeCode, thisValue: actualThis);
+            return context.Engine._referencePool.Rent(baseValue, property, StrictModeScope.IsStrictModeCode, thisValue: actualThis);
         }
 
         /// <summary>

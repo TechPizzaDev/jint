@@ -1,4 +1,4 @@
-using Esprima.Ast;
+using Jint.Native;
 using Jint.Native.Function;
 
 namespace Jint.Runtime.Interpreter.Statements
@@ -29,7 +29,7 @@ namespace Jint.Runtime.Interpreter.Statements
                 env.InitializeBinding((Key) classBinding, value);
             }
 
-            return new Completion(CompletionType.Normal, null!, _statement);
+            return new Completion(CompletionType.Normal, JsEmpty.Instance, _statement);
         }
     }
 }

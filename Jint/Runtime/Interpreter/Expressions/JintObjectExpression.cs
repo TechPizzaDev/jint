@@ -1,4 +1,3 @@
-using Esprima.Ast;
 using Jint.Collections;
 using Jint.Native;
 using Jint.Native.Function;
@@ -77,11 +76,11 @@ namespace Jint.Runtime.Interpreter.Expressions
             {
                 string? propName = null;
                 var property = properties[i];
-                if (property is Property p)
+                if (property is Acornima.Ast.ObjectProperty p)
                 {
                     if (p.Key is Literal literal)
                     {
-                        propName = EsprimaExtensions.LiteralKeyToString(literal);
+                        propName = AstExtensions.LiteralKeyToString(literal);
                     }
 
                     if (!p.Computed && p.Key is Identifier identifier)
@@ -177,10 +176,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
                 if (property.Method)
                 {
-                    var methodDef = property.DefineMethod(obj);
-                    methodDef.Closure.SetFunctionName(methodDef.Key);
-                    var desc = new PropertyDescriptor(methodDef.Closure, PropertyFlag.ConfigurableEnumerableWritable);
-                    obj.DefinePropertyOrThrow(methodDef.Key, desc);
+                    ClassDefinition.MethodDefinitionEvaluation(engine, obj, property, enumerable: true);
                     continue;
                 }
 
@@ -217,14 +213,13 @@ namespace Jint.Runtime.Interpreter.Expressions
 
                     if (expr._expression.IsAnonymousFunctionDefinition())
                     {
-                        var closure = (FunctionInstance) propValue;
+                        var closure = (Function) propValue;
                         closure.SetFunctionName(propName);
                     }
 
-                    var propDesc = new PropertyDescriptor(propValue, PropertyFlag.ConfigurableEnumerableWritable);
-                    obj.DefinePropertyOrThrow(propName, propDesc);
+                    obj.CreateDataPropertyOrThrow(propName, propValue);
                 }
-                else if (property.Kind == PropertyKind.Get || property.Kind == PropertyKind.Set)
+                else if (property.Kind is PropertyKind.Get or PropertyKind.Set)
                 {
                     var function = objectProperty.GetFunctionDefinition(engine);
                     var closure = engine.Realm.Intrinsics.Function.OrdinaryFunctionCreate(
@@ -251,7 +246,7 @@ namespace Jint.Runtime.Interpreter.Expressions
 
         internal sealed class JintEmptyObjectExpression : JintExpression
         {
-            public static JintEmptyObjectExpression Instance = new(new ObjectExpression(NodeList.Create(System.Linq.Enumerable.Empty<Node>())));
+            public static JintEmptyObjectExpression Instance = new(new ObjectExpression(NodeList.From(Array.Empty<Node>())));
 
             private JintEmptyObjectExpression(Expression expression) : base(expression)
             {

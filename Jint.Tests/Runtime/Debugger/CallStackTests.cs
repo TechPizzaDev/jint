@@ -1,6 +1,4 @@
-﻿using Esprima;
-using Esprima.Ast;
-using Jint.Runtime.Debugger;
+﻿using Jint.Runtime.Debugger;
 
 namespace Jint.Tests.Runtime.Debugger
 {
@@ -110,7 +108,7 @@ bar()";
             bool atReturn = false;
             bool didCheckReturn = false;
 
-            engine.DebugHandler.Step += (DebugHandler sender, ref DebugInformation info) =>
+            engine.Debugger.Step += (DebugHandler sender, ref DebugInformation info) =>
             {
                 if (atReturn)
                 {

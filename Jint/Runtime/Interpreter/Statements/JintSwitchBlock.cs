@@ -1,7 +1,7 @@
-using Esprima.Ast;
 using Jint.Native;
 using Jint.Runtime.Environments;
 using Jint.Runtime.Interpreter.Expressions;
+using Environment = Jint.Runtime.Environments.Environment;
 
 namespace Jint.Runtime.Interpreter.Statements
 {
@@ -39,10 +39,10 @@ namespace Jint.Runtime.Interpreter.Statements
             var defaultCaseIndex = -1;
 
             var i = 0;
-            EnvironmentRecord? oldEnv = null;
+            Environment? oldEnv = null;
             var temp = _jintSwitchBlock;
 
-            DeclarativeEnvironmentRecord? blockEnv = null;
+            DeclarativeEnvironment? blockEnv = null;
 
             start:
             for (; i < temp.Length; i++)
@@ -54,7 +54,7 @@ namespace Jint.Runtime.Interpreter.Statements
                     blockEnv ??= JintEnvironment.NewDeclarativeEnvironment(context.Engine, oldEnv);
                     blockEnv.Clear();
 
-                    JintStatementList.BlockDeclarationInstantiation(context.Engine, blockEnv, clause.LexicalDeclarations);
+                    JintStatementList.BlockDeclarationInstantiation(blockEnv, clause.LexicalDeclarations);
                     context.Engine.UpdateLexicalEnvironment(blockEnv);
                 }
 

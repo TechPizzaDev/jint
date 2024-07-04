@@ -1,5 +1,4 @@
 ﻿using Jint.Native;
-using Jint.Native.Error;
 using Jint.Runtime;
 
 namespace Jint.Tests.PublicInterface
@@ -13,7 +12,7 @@ namespace Jint.Tests.PublicInterface
 
             engine.SetValue("throw1", () =>
             {
-                throw new JavaScriptException(engine.Realm.Intrinsics.Error, "message 1");
+                throw new JavaScriptException(engine.Intrinsics.Error, "message 1");
             });
 
             engine.SetValue("throw2", () =>
