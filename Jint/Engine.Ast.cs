@@ -26,6 +26,16 @@ public partial class Engine
         return new Prepared<Script>(preparedScript, parserOptions);
     }
 
+    public static Prepared<Script> PrepareScript(in NodeList<Statement> body, bool strict, ScriptPreparationOptions? options = null)
+    {
+        options ??= ScriptPreparationOptions.Default;
+        var astAnalyzer = new AstAnalyzer(options);
+        Script script = new(body, strict);
+        astAnalyzer.Visit(script);
+        var parserOptions = options.GetParserOptions();
+        return new Prepared<Script>(script, parserOptions);
+    }
+
     /// <summary>
     /// Prepares a module for the engine that includes static analysis data to speed up execution during run-time.
     /// </summary>
@@ -41,7 +51,7 @@ public partial class Engine
         return new Prepared<Module>(preparedModule, parserOptions);
     }
 
-    private sealed class AstAnalyzer
+    private sealed class AstAnalyzer : AstVisitor
     {
         private static readonly bool _canCompileNegativeLookaroundAssertions = typeof(Regex).Assembly.GetName().Version?.Major is not (null or 7 or 8);
 
@@ -54,7 +64,18 @@ public partial class Engine
             _preparationOptions = preparationOptions;
         }
 
+        public override object? Visit(Node node)
+        {
+            NodeVisitor(node);
+            return base.Visit(node);
+        }
+
         public void NodeVisitor(Node node, OnNodeContext _)
+        {
+            NodeVisitor(node);
+        }
+
+        public void NodeVisitor(Node node)
         {
             switch (node.Type)
             {
